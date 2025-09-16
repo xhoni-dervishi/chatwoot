@@ -188,6 +188,23 @@
 
 # End of Captain Config
 
+# MARK: AI Response Config
+- name: AI_OPENAI_API_KEY
+  display_title: 'AI OpenAI API Key'
+  description: 'The API key used to authenticate requests to OpenAI services for AI response generation.'
+  locked: false
+  type: secret
+- name: AI_OPENAI_MODEL
+  display_title: 'AI OpenAI Model'
+  description: 'The OpenAI model configured for use in AI response generation. Default: gpt-4o-mini'
+  locked: false
+- name: AI_OPENAI_ENDPOINT
+  display_title: 'AI OpenAI API Endpoint (optional)'
+  description: 'The OpenAI endpoint configured for use in AI response generation. Default: https://api.openai.com/'
+  locked: false
+
+# End of AI Response Config
+
 # ------- Chatwoot Internal Config for Cloud ----#
 - name: CHATWOOT_INBOX_TOKEN
   value:

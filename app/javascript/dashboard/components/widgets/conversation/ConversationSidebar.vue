@@ -18,9 +18,13 @@ const { width: windowWidth } = useWindowSize();
 
 const activeTab = computed(() => {
   const { is_contact_sidebar_open: isContactSidebarOpen } = uiSettings.value;
+  const { is_ai_response_panel_open: isAIResponsePanelOpen } = uiSettings.value;
 
   if (isContactSidebarOpen) {
     return 0;
+  }
+  if (isAIResponsePanelOpen) {
+    return 1;
   }
   return null;
 });
@@ -34,6 +38,7 @@ const closeContactPanel = () => {
     updateUISettings({
       is_contact_sidebar_open: false,
       is_copilot_panel_open: false,
+      is_ai_response_panel_open: false,
     });
   }
 };
@@ -55,6 +60,12 @@ const closeContactPanel = () => {
         v-show="activeTab === 0"
         :conversation-id="currentChat.id"
         :inbox-id="currentChat.inbox_id"
+      />
+    </div>
+    <div class="flex flex-1 overflow-auto">
+      <AIResponsePanel
+        v-show="activeTab === 1"
+        :conversation-id="currentChat.id"
       />
     </div>
   </div>

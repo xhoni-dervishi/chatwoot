@@ -120,6 +120,7 @@ Rails.application.routes.draw do
               resource :participants, only: [:show, :create, :update, :destroy]
               resource :direct_uploads, only: [:create]
               resource :draft_messages, only: [:show, :update, :destroy]
+              post :ai_generate_response, to: 'ai#generate_response'
             end
             member do
               post :mute

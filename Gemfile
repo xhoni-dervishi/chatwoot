@@ -105,6 +105,7 @@ gem 'grpc'
 # this dependency breaks the slack-ruby-client gem
 gem 'google-cloud-translate-v3', '>= 0.7.0'
 
+
 ##-- apm and error monitoring ---#
 # loaded only when environment variables are set.
 # ref application.rb
@@ -116,6 +117,9 @@ gem 'scout_apm', require: false
 gem 'sentry-rails', '>= 5.19.0', require: false
 gem 'sentry-ruby', require: false
 gem 'sentry-sidekiq', '>= 5.19.0', require: false
+gem 'omniauth-saml', '>=2.2.4'
+gem 'ruby-saml', '>=1.18.1'
+
 
 ##-- background job processing --##
 gem 'sidekiq', '>= 7.3.1'

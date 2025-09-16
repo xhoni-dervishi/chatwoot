@@ -251,7 +251,8 @@
     },
     "SIDEBAR": {
       "CONTACT": "Contact",
-      "COPILOT": "Copilot"
+      "COPILOT": "Copilot",
+      "AI_RESPONSE": "AI Response"
     }
   },
   "EMAIL_TRANSCRIPT": {
@@ -402,5 +403,19 @@
   },
   "GALLERY_VIEW": {
     "ERROR_DOWNLOADING": "Unable to download attachment. Please try again"
+  },
+  "AI_RESPONSE": {
+    "BUTTON": {
+      "LABEL": "AI Response"
+    },
+    "MODAL": {
+      "TITLE": "AI Response Generator",
+      "DESCRIPTION": "Generate an AI-powered response based on the conversation context",
+      "GENERATE_BUTTON": "Generate Response",
+      "GENERATING": "Generating response...",
+      "RETRY_BUTTON": "Try Again",
+      "COPY_BUTTON": "Copy",
+      "INSERT_BUTTON": "Insert into Editor"
+    }
   }
 }

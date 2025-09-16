@@ -132,6 +132,17 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_08_123008) do
     t.index ["account_id"], name: "index_agent_capacity_policies_on_account_id"
   end
 
+  create_table "ai_conversations", force: :cascade do |t|
+    t.bigint "conversation_id", null: false
+    t.boolean "ai_enabled", default: false
+    t.jsonb "ai_config", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ai_enabled"], name: "idx_ai_conversations_on_ai_enabled"
+    t.index ["conversation_id"], name: "idx_ai_conversations_on_conversation_id", unique: true
+    t.index ["conversation_id"], name: "index_ai_conversations_on_conversation_id"
+  end
+
   create_table "applied_slas", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.bigint "sla_policy_id", null: false
@@ -1202,6 +1213,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_08_123008) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "ai_conversations", "conversations"
   add_foreign_key "inboxes", "portals"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).
       on("accounts").
