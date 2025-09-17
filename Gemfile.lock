@@ -272,9 +272,6 @@ GEM
       faraday (>= 1.0.0, < 3.0)
       googleauth (~> 1)
     ffi (1.17.2)
-    ffi (1.17.2-arm64-darwin)
-    ffi (1.17.2-x86_64-darwin)
-    ffi (1.17.2-x86_64-linux-gnu)
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
       rake
@@ -352,15 +349,6 @@ GEM
     groupdate (6.2.1)
       activesupport (>= 5.2)
     grpc (1.72.0)
-      google-protobuf (>= 3.25, < 5.0)
-      googleapis-common-protos-types (~> 1.0)
-    grpc (1.72.0-arm64-darwin)
-      google-protobuf (>= 3.25, < 5.0)
-      googleapis-common-protos-types (~> 1.0)
-    grpc (1.72.0-x86_64-darwin)
-      google-protobuf (>= 3.25, < 5.0)
-      googleapis-common-protos-types (~> 1.0)
-    grpc (1.72.0-x86_64-linux)
       google-protobuf (>= 3.25, < 5.0)
       googleapis-common-protos-types (~> 1.0)
     gserver (0.0.1)
@@ -449,14 +437,7 @@ GEM
     letter_opener (1.10.0)
       launchy (>= 2.2, < 4)
     libdatadog (18.1.0.1.0)
-    libdatadog (18.1.0.1.0-x86_64-linux)
     libddwaf (1.24.1.0.3)
-      ffi (~> 1.0)
-    libddwaf (1.24.1.0.3-arm64-darwin)
-      ffi (~> 1.0)
-    libddwaf (1.24.1.0.3-x86_64-darwin)
-      ffi (~> 1.0)
-    libddwaf (1.24.1.0.3-x86_64-linux)
       ffi (~> 1.0)
     line-bot-api (1.28.0)
     lint_roller (1.1.0)
@@ -526,12 +507,6 @@ GEM
     nokogiri (1.18.9)
       mini_portile2 (~> 2.8.2)
       racc (~> 1.4)
-    nokogiri (1.18.9-arm64-darwin)
-      racc (~> 1.4)
-    nokogiri (1.18.9-x86_64-darwin)
-      racc (~> 1.4)
-    nokogiri (1.18.9-x86_64-linux-gnu)
-      racc (~> 1.4)
     oauth (1.1.0)
       oauth-tty (~> 1.0, >= 1.0.1)
       snaky_hash (~> 2.0)
@@ -563,6 +538,9 @@ GEM
     omniauth-rails_csrf_protection (1.0.2)
       actionpack (>= 4.2)
       omniauth (~> 2.0)
+    omniauth-saml (2.2.4)
+      omniauth (~> 2.1)
+      ruby-saml (~> 1.18)
     openssl (3.2.0)
     orm_adapter (0.5.0)
     os (1.1.4)
@@ -728,6 +706,9 @@ GEM
       faraday (>= 1)
       faraday-multipart (>= 1)
     ruby-progressbar (1.13.0)
+    ruby-saml (1.18.1)
+      nokogiri (>= 1.13.10)
+      rexml
     ruby-vips (2.1.4)
       ffi (~> 1.12)
     ruby2_keywords (0.0.5)
@@ -908,15 +889,7 @@ GEM
     zeitwerk (2.6.17)
 
 PLATFORMS
-  arm64-darwin-20
-  arm64-darwin-21
-  arm64-darwin-22
   ruby
-  x86_64-darwin-18
-  x86_64-darwin-20
-  x86_64-darwin-21
-  x86_64-darwin-22
-  x86_64-linux
 
 DEPENDENCIES
   active_record_query_trace
@@ -995,7 +968,6 @@ DEPENDENCIES
   omniauth-oauth2
   omniauth-rails_csrf_protection (~> 1.0, >= 1.0.2)
   omniauth-saml (>= 2.2.4)
-  opensearch-ruby
   pg
   pg_search
   pgvector
