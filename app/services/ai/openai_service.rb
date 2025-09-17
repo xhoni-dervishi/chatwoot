@@ -27,16 +27,16 @@ class Ai::OpenaiService
   private
 
   def get_api_key
-    GlobalConfigService.load('AI_OPENAI_API_KEY', nil) ||
+    GlobalConfigService.load('OPENAI_API_KEY', nil) ||
       raise(ApiError, 'AI OpenAI API key not configured')
   end
 
   def get_model
-    GlobalConfigService.load('AI_OPENAI_MODEL', nil) || DEFAULT_MODEL
+    GlobalConfigService.load('OPENAI_MODEL', nil) || DEFAULT_MODEL
   end
 
   def get_endpoint
-    GlobalConfigService.load('AI_OPENAI_ENDPOINT', nil) || DEFAULT_ENDPOINT
+    GlobalConfigService.load('OPENAI_ENDPOINT', nil) || DEFAULT_ENDPOINT
   end
 
   def initialize_client
