@@ -5,6 +5,7 @@ import SidebarActionsHeader from 'dashboard/components-next/SidebarActionsHeader
 import AIApi from 'dashboard/api/ai';
 import { emitter } from 'shared/helpers/mitt';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
+import { useStore } from 'vuex';
 
 const props = defineProps({
   conversationId: {
@@ -14,11 +15,13 @@ const props = defineProps({
 });
 
 const { updateUISettings } = useUISettings();
+const store = useStore();
 
 const isGenerating = ref(false);
 const aiResponse = ref('');
 const error = ref('');
 const customPrompt = ref('');
+const loadingDots = ref(0);
 
 const closeAIResponsePanel = () => {
   updateUISettings({
@@ -26,23 +29,34 @@ const closeAIResponsePanel = () => {
   });
 };
 
-const generateResponse = async () => {
-  console.log('Generating AI response for conversation:', props.conversationId);
+const startLoadingAnimation = () => {
+  loadingDots.value = 0;
+  const interval = setInterval(() => {
+    if (!isGenerating.value) {
+      clearInterval(interval);
+      return;
+    }
+    loadingDots.value = (loadingDots.value + 1) % 4; // 0, 1, 2, 3, then back to 0
+  }, 500); // Change every 500ms
+};
+
+const draftReply = async () => {
+  if (isGenerating.value) return;
+
   isGenerating.value = true;
   error.value = '';
   aiResponse.value = '';
   
+  // Start the loading animation
+  startLoadingAnimation();
+
   try {
-    const response = await AIApi.generateResponse(props.conversationId, customPrompt.value);
+    const prompt = customPrompt.value.trim() || 'Draft a helpful response to this customer conversation';
+    const response = await AIApi.generateResponse(props.conversationId, prompt);
     
     if (response.data.success) {
-      // Extract the text from the response structure
-      const messageContent = response.data.response.find(item => item.type === 'message');
-      if (messageContent && messageContent.content && messageContent.content[0]) {
-        aiResponse.value = messageContent.content[0].text;
-      } else {
-        aiResponse.value = 'No response text found in the API response.';
-      }
+      // The response is now a simple string from the backend
+      aiResponse.value = response.data.response;
     } else {
       error.value = response.data.error || 'Failed to generate AI response';
     }
@@ -55,8 +69,22 @@ const generateResponse = async () => {
   }
 };
 
-const hasResponse = computed(() => aiResponse.value && aiResponse.value.length > 0);
-const showEmptyState = computed(() => !hasResponse.value && !isGenerating.value && !error.value);
+const sendDraft = async () => {
+  if (!aiResponse.value.trim()) return;
+  
+  try {
+    // Send the draft as a message to the conversation using the store
+    await store.dispatch('createPendingMessageAndSend', {
+      conversationId: props.conversationId,
+      message: aiResponse.value,
+      private: false, 
+    });
+    
+  } catch (err) {
+    console.error('Failed to send message:', err);
+    error.value = 'Failed to send message. Please try again.';
+  }
+};
 
 const copyToClipboard = async () => {
   if (!aiResponse.value) return;
@@ -72,8 +100,19 @@ const copyToClipboard = async () => {
 const insertIntoEditor = () => {
   if (!aiResponse.value) return;
   emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, aiResponse.value);
-  console.log('Response inserted into editor');
 };
+
+const clearDraft = () => {
+  aiResponse.value = '';
+  customPrompt.value = '';
+};
+
+const hasResponse = computed(() => aiResponse.value && aiResponse.value.length > 0);
+const showEmptyState = computed(() => !hasResponse.value && !isGenerating.value && !error.value);
+const loadingText = computed(() => {
+  const dots = '.'.repeat(loadingDots.value);
+  return `Drafting your reply${dots}`;
+});
 </script>
 
 <template>
@@ -84,54 +123,109 @@ const insertIntoEditor = () => {
     />
     
     <div class="flex flex-col h-full p-4 overflow-auto">
-      <!-- Simple Test -->
+      <!-- Main Content Area -->
       <div class="flex-1 flex flex-col gap-4">
-        <!-- Show response if available -->
-        <div v-if="aiResponse" class="w-full p-4 bg-gray-400 rounded">
-          <p class="text-sm">{{ aiResponse }}</p>
+        <!-- Empty State - Show Draft Button -->
+        <div v-if="showEmptyState" class="flex-1 flex flex-col items-center justify-end text-center mb-4">
+          <div class="mb-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">AI Assistant</h3>
+            <p class="text-sm text-gray-500 mb-6">Get AI-powered help drafting responses to your customers</p>
+          </div>
+          
+          <!-- Custom Prompt Input (Optional) -->
+          <div class="w-full mb-2">
+            <label class="block text-xs font-medium text-n-slate-11 mb-2">
+              Custom Prompt (Optional)
+            </label>
+            <textarea
+              v-model="customPrompt"
+              placeholder="Optional custom prompt for the AI to generate a response"
+              class="w-full px-3 py-2 text-sm border border-n-weak rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
+              rows="2"
+            ></textarea>
+          </div>
+          
+          <!-- Draft Reply Button -->
+          <button
+            @click="draftReply"
+            :disabled="isGenerating"
+            class="w-full px-6 py-3 bg-n-brand text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ isGenerating ? 'Drafting...' : 'Draft a reply' }}
+          </button>
         </div>
-        
-        <!-- Show error if available -->
-        <div v-if="error" class="w-full mt-4 p-4 bg-red-100 rounded">
-          <p class="text-sm text-red-600">{{ error }}</p>
+
+        <!-- Loading State -->
+        <div v-else-if="isGenerating" class="flex-1 flex flex-col items-center justify-center text-center">
+          <h3 class="text-lg font-medium text-gray-900 mb-2">{{ loadingText }}</h3>
+          <p class="text-sm text-gray-500">AI is analyzing the conversation and crafting a response</p>
         </div>
-       </div>
-       
-       <!-- Text Editor at Bottom -->
-       <div class="mt-4">
-         <label class="block text-xs font-medium text-n-slate-11 mb-2">
-           Custom Prompt
-         </label>
-         <textarea
-           v-model="customPrompt"
-           placeholder="Add additional context or instructions..."
-           class="w-full px-3 py-2 text-sm border border-n-weak rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
-           rows="3"
-         ></textarea>
-         <div class="flex gap-2 mt-2">
-         <button
-           @click="copyToClipboard"
-           :disabled="isGenerating"
-           class="px-4 py-2 bg-n-brand text-white rounded-lg disabled:opacity-50 flex-1"
-         >
-           Copy Response
-         </button>
-         <button
-          @click="generateResponse"
-          :disabled="isGenerating"
-          class="px-4 py-2 bg-n-brand text-white rounded-lg disabled:opacity-50 flex-1"
-        >
-          {{ isGenerating ? 'Generating...' : 'Generate Response' }}
-        </button>
-        <button
-          @click="insertIntoEditor"
-          :disabled="isGenerating"
-          class="px-4 py-2 bg-n-brand text-white rounded-lg disabled:opacity-50 flex-1"
-        >
-          Insert into Editor
-        </button>
+
+        <!-- Draft Display -->
+        <div v-else-if="hasResponse" class="flex-1 flex flex-col items-center">
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-gray-900">AI Draft</h3>
+              <button
+                @click="clearDraft"
+                class="text-xs text-gray-500 hover:text-gray-700"
+              >
+                Clear
+              </button>
+            </div>
+            
+            <!-- Draft Content -->
+            <div class="w-full p-4 bg-gray-400 rounded">
+              <p class="text-sm whitespace-pre-wrap">{{ aiResponse }}</p>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="space-y-3 w-full mt-auto">
+            <button
+              @click="sendDraft"
+              class="w-full px-4 py-2 bg-n-brand text-white rounded-lg font-medium"
+            >
+              Send
+            </button>
+            
+            <div class="flex space-x-2">
+              <button
+                @click="copyToClipboard"
+                class="flex-1 px-4 py-2 bg-n-slate-9/10 text-n-slate-12 rounded-lg font-medium"
+              >
+                Copy
+              </button>
+              <button
+                @click="insertIntoEditor"
+                class="flex-1 px-4 py-2 bg-n-slate-9/10 text-n-slate-12 rounded-lg font-medium"
+              >
+                Insert
+              </button>
+            </div>
+            
+            <button
+              @click="draftReply"
+              :disabled="isGenerating"
+              class="w-full px-4 py-2 border border-n-slate-9/10 text-n-slate-12 rounded-lg font-medium disabled:opacity-50"
+            >
+              Draft Another Reply
+            </button>
+          </div>
         </div>
-       </div>
-     </div>
-   </div>
- </template>
+
+        <!-- Error State -->
+        <div v-else-if="error" class="flex-1 flex flex-col items-center justify-center text-center">
+          <h3 class="text-lg font-medium text-gray-900 mb-2">Something went wrong</h3>
+          <p class="text-sm text-n-slate-12 mb-6">{{ error }}</p>
+          <button
+            @click="draftReply"
+            class="px-6 py-3 bg-n-brand text-white rounded-lg font-medium"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
