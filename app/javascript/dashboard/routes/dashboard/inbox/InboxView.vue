@@ -74,6 +74,18 @@ const isContactPanelOpen = computed(() => {
   return false;
 });
 
+const isSidebarOpen = computed(() => {
+  if (currentChat.value.id) {
+    const { 
+      is_contact_sidebar_open: isContactSidebarOpen,
+      is_copilot_panel_open: isCopilotPanelOpen,
+      is_ai_response_panel_open: isAIResponsePanelOpen
+    } = uiSettings.value;
+    return isContactSidebarOpen || isCopilotPanelOpen || isAIResponsePanelOpen;
+  }
+  return false;
+});
+
 const findConversation = () => {
   return conversationById.value(conversationId.value);
 };
@@ -215,7 +227,7 @@ onMounted(async () => {
           <SidepanelSwitch v-if="currentChat.id" />
         </ConversationBox>
         <ConversationSidebar
-          v-if="isContactPanelOpen"
+          v-if="isSidebarOpen"
           :current-chat="currentChat"
         />
       </div>
