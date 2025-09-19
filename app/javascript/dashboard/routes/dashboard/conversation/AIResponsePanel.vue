@@ -47,15 +47,13 @@ const draftReply = async () => {
   error.value = '';
   aiResponse.value = '';
   
-  // Start the loading animation
   startLoadingAnimation();
 
   try {
-    const prompt = customPrompt.value.trim() || 'Draft a helpful response to this customer conversation';
+    const prompt = customPrompt.value.trim();
     const response = await AIApi.generateResponse(props.conversationId, prompt);
     
     if (response.data.success) {
-      // The response is now a simple string from the backend
       aiResponse.value = response.data.response;
     } else {
       error.value = response.data.error || 'Failed to generate AI response';
@@ -70,13 +68,12 @@ const draftReply = async () => {
 };
 
 const sendDraft = async () => {
-  if (!aiResponse.value.trim()) return;
+  if (!draftResponse.value.trim()) return;
   
   try {
-    // Send the draft as a message to the conversation using the store
     await store.dispatch('createPendingMessageAndSend', {
       conversationId: props.conversationId,
-      message: aiResponse.value,
+      message: draftResponse.value,
       private: false, 
     });
     
@@ -87,10 +84,10 @@ const sendDraft = async () => {
 };
 
 const copyToClipboard = async () => {
-  if (!aiResponse.value) return;
+  if (!draftResponse.value) return;
   
   try {
-    await navigator.clipboard.writeText(aiResponse.value);
+    await navigator.clipboard.writeText(draftResponse.value);
     console.log('Response copied to clipboard');
   } catch (err) {
     console.error('Failed to copy to clipboard:', err);
@@ -98,14 +95,28 @@ const copyToClipboard = async () => {
 };
 
 const insertIntoEditor = () => {
-  if (!aiResponse.value) return;
-  emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, aiResponse.value);
+  if (!draftResponse.value) return;
+  emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, draftResponse.value);
 };
 
 const clearDraft = () => {
   aiResponse.value = '';
   customPrompt.value = '';
 };
+
+const extractDraftResponse = (response) => {
+  if (!response) return '';
+  
+  const draftResponseMatch = response.match(/###\s*Draft Response\s*\n([\s\S]*?)(?=\n###|$)/i);
+  
+  if (draftResponseMatch && draftResponseMatch[1]) {
+    return draftResponseMatch[1].trim();
+  }
+  
+  return response;
+};
+
+const draftResponse = computed(() => extractDraftResponse(aiResponse.value));
 
 const hasResponse = computed(() => aiResponse.value && aiResponse.value.length > 0);
 const showEmptyState = computed(() => !hasResponse.value && !isGenerating.value && !error.value);
