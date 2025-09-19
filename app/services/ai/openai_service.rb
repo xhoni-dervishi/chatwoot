@@ -14,7 +14,7 @@ class Ai::OpenaiService
   def generate_response(conversation_context, custom_prompt)
     messages = build_messages(conversation_context, custom_prompt)
     
-    response = make_chat_completions_api_call(messages)
+    response = make_response_api_call(messages)
 
     extract_response_text(response)
   rescue StandardError => e
@@ -277,11 +277,11 @@ class Ai::OpenaiService
     end
   end
 
-  def make_chat_completions_api_call(messages)
+  def make_response_api_call(messages)
     require 'net/http'
     require 'uri'
     
-    uri = URI("#{@endpoint}/chat/completions")
+    uri = URI("#{@endpoint}/responses")
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     
@@ -289,25 +289,38 @@ class Ai::OpenaiService
     request['Content-Type'] = 'application/json'
     request['Authorization'] = "Bearer #{@api_key}"
     
+    input_text = convert_messages_to_input(messages)
+    
     request_body = {
       model: @model,
-      messages: messages,
+      input: input_text,
+      instructions: extract_system_instructions(messages)
     }
     
     request.body = request_body.to_json
     
+    Rails.logger.info "OpenAI /response API request body: #{request_body.to_json}"
+    
     start_time = Time.current
     response = http.request(request)
     end_time = Time.current
+    Rails.logger.info "OpenAI /response API request time: #{end_time - start_time} seconds"
     
     response
   end
 
+  def extract_system_instructions(messages)
+    system_message = messages.find { |msg| msg[:role] == 'system' }
+    system_message ? system_message[:content] : nil
+  end
+
   def convert_messages_to_input(messages)
-    messages.map { |msg| "#{msg[:role]}: #{msg[:content]}" }.join("\n")
+    non_system_messages = messages.reject { |msg| msg[:role] == 'system' }
+    non_system_messages.map { |msg| "#{msg[:role]}: #{msg[:content]}" }.join("\n")
   end
 
   def extract_response_text(response)
+    Rails.logger.info "OpenAI /responses API response: #{response.body}"
     
     if response.code != '200'
       Rails.logger.error "HTTP Error: #{response.code} - #{response.message}"
@@ -316,20 +329,28 @@ class Ai::OpenaiService
     
     response_body = JSON.parse(response.body)
     
-    # Handle error responses
     if response_body['error']
       error_message = response_body.dig('error', 'message') || 'Unknown OpenAI API error'
       Rails.logger.error "OpenAI API error: #{error_message}"
       raise ApiError, "OpenAI API error: #{error_message}"
     end
     
-    # Handle success responses - extract from choices array
-    choices = response_body.dig('choices')
-    if choices && choices.any?
-      content = choices.first.dig('message', 'content')
-      if content
-        return content
+    output_items = response_body['output']
+    if output_items && output_items.is_a?(Array)
+      message_item = output_items.find { |item| item['type'] == 'message' }
+      if message_item && message_item['content']
+        content_array = message_item['content']
+        if content_array.is_a?(Array) && content_array.any?
+          text_content = content_array.find { |content| content['type'] == 'output_text' }
+          if text_content && text_content['text']
+            return text_content['text']
+          end
+        end
       end
+    end
+    
+    if response_body['content']
+      return response_body['content']
     end
     
     Rails.logger.error "No valid content found in response: #{response_body}"
