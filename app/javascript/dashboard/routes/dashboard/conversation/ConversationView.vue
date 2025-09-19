@@ -68,6 +68,9 @@ export default {
   data() {
     return {
       showSearchModal: false,
+      // Resize functionality
+      dividerPosition: parseFloat(localStorage.getItem('conversation-divider-position')) || 25, // 25% from right
+      isDragging: false,
     };
   },
   computed: {
@@ -105,6 +108,24 @@ export default {
       const { is_ai_response_panel_open: isAIResponsePanelOpen } = this.uiSettings;
       return isAIResponsePanelOpen;
     },
+    isRTL() {
+      return document.dir === 'rtl' || document.documentElement.dir === 'rtl';
+    },
+    isDraggingClass() {
+      return this.isDragging ? 'resizing' : '';
+    },
+    isMobile() {
+      return window.innerWidth < 768; // md breakpoint
+    },
+    shouldShowResizeDivider() {
+      return !this.isMobile && (this.shouldShowSidebar || this.shouldShowAIResponsePanel);
+    },
+    sidebarWidth() {
+      return this.isMobile ? '100%' : `${this.dividerPosition}%`;
+    },
+    mainContentWidth() {
+      return this.isMobile ? '100%' : `${100 - this.dividerPosition}%`;
+    },
   },
   watch: {
     conversationId() {
@@ -130,6 +151,10 @@ export default {
     this.$watch('chatList.length', () => {
       this.setActiveChat();
     });
+  },
+  beforeDestroy() {
+    // Cleanup resize event listeners
+    document.removeEventListener('mousemove', this.handleDragging);
   },
 
   methods: {
@@ -199,12 +224,56 @@ export default {
     closeSearch() {
       this.showSearchModal = false;
     },
+    closeMobileSidebar() {
+      if (this.isMobile) {
+        // Close both sidebars on mobile
+        this.updateUISettings({
+          is_contact_sidebar_open: false,
+          is_ai_response_panel_open: false,
+        });
+      }
+    },
+    // Resize handlers based on the example (desktop only)
+    handleDragging(e) {
+      if (!this.isDragging || this.isMobile) return;
+      
+      let percentage;
+      
+      if (this.isRTL) {
+        // For RTL, calculate from left edge
+        percentage = (e.pageX / window.innerWidth) * 100;
+      } else {
+        // For LTR, calculate from right edge (inverted)
+        percentage = ((window.innerWidth - e.pageX) / window.innerWidth) * 100;
+      }
+      
+      // Constrain between 15% and 50% (reasonable sidebar width range)
+      if (percentage >= 15 && percentage <= 50) {
+        this.dividerPosition = parseFloat(percentage.toFixed(2));
+      }
+    },
+    startDragging() {
+      if (this.isMobile) return;
+      this.isDragging = true;
+      document.addEventListener('mousemove', this.handleDragging);
+    },
+    endDragging() {
+      if (this.isMobile) return;
+      this.isDragging = false;
+      document.removeEventListener('mousemove', this.handleDragging);
+      // Save position to localStorage
+      localStorage.setItem('conversation-divider-position', this.dividerPosition.toString());
+    },
   },
 };
 </script>
 
 <template>
-  <section class="flex w-full h-full min-w-0">
+  <section 
+    class="flex w-full h-full min-w-0 relative" 
+    :class="isDraggingClass"
+    @mouseup="endDragging()"
+  >
     <ChatList
       :show-conversation-list="showConversationList"
       :conversation-inbox="inboxId"
@@ -215,15 +284,129 @@ export default {
       :is-on-expanded-layout="isOnExpandedLayout"
       @conversation-load="onConversationLoad"
     />
-    <ConversationBox
-      v-if="showMessageView"
-      :inbox-id="inboxId"
-      :is-on-expanded-layout="isOnExpandedLayout"
+    
+    <!-- Main Content Area -->
+    <div 
+      class="flex flex-1 min-w-0"
+      :style="{ width: mainContentWidth }"
     >
-      <SidepanelSwitch v-if="currentChat.id" />
-    </ConversationBox>
-    <ConversationSidebar v-if="shouldShowSidebar" :current-chat="currentChat" />
-    <AIResponsePanel v-if="shouldShowAIResponsePanel" :conversation-id="currentChat.id" />
+      <ConversationBox
+        v-if="showMessageView"
+        :inbox-id="inboxId"
+        :is-on-expanded-layout="isOnExpandedLayout"
+      >
+        <SidepanelSwitch v-if="currentChat.id" />
+      </ConversationBox>
+    </div>
+
+    <!-- Resize Divider (Desktop only) -->
+    <div
+      v-if="shouldShowResizeDivider"
+      class="divider"
+      :style="{
+        right: isRTL ? `${100 - dividerPosition}%` : `${dividerPosition}%`
+      }"
+      @mousedown="startDragging()"
+    ></div>
+
+    <!-- Mobile Overlay -->
+    <div 
+      v-if="isMobile && (shouldShowSidebar || shouldShowAIResponsePanel)"
+      class="mobile-overlay show"
+      @click="closeMobileSidebar"
+    ></div>
+
+    <!-- Sidebar Area -->
+    <div 
+      v-if="shouldShowSidebar || shouldShowAIResponsePanel"
+      class="flex flex-col"
+      :class="{ 
+        'mobile-sidebar': isMobile,
+        'show': isMobile && (shouldShowSidebar || shouldShowAIResponsePanel)
+      }"
+      :style="{ width: sidebarWidth }"
+    >
+      <ConversationSidebar v-if="shouldShowSidebar" :current-chat="currentChat" />
+      <AIResponsePanel v-if="shouldShowAIResponsePanel" :conversation-id="currentChat.id" />
+    </div>
+    
     <CmdBarConversationSnooze />
   </section>
 </template>
+
+<style scoped>
+.divider {
+  height: 100vh;
+  width: 6px;
+  background: #fff;
+  transform: translateX(-3px);
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  cursor: ew-resize;
+  border: 1px solid #e5e7eb;
+  transition: background-color 0.2s ease;
+}
+
+.divider:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+/* RTL support for divider */
+[dir="rtl"] .divider {
+  transform: translateX(3px);
+}
+
+/* Prevent text selection during resize */
+.resizing {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.resizing * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Mobile sidebar styles */
+.mobile-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  z-index: 50;
+  background: white;
+  box-shadow: -4px 0 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateX(100%);
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Show mobile sidebar when active */
+.mobile-sidebar.show {
+  transform: translateX(0);
+}
+
+/* Mobile overlay */
+.mobile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+
+.mobile-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+</style>

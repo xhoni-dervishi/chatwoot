@@ -1,11 +1,12 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import SidebarActionsHeader from 'dashboard/components-next/SidebarActionsHeader.vue';
 import AIApi from 'dashboard/api/ai';
 import { emitter } from 'shared/helpers/mitt';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { useStore } from 'vuex';
+import Icon from 'dashboard/components-next/icon/Icon.vue';
 
 const props = defineProps({
   conversationId: {
@@ -22,6 +23,8 @@ const aiResponse = ref('');
 const error = ref('');
 const customPrompt = ref('');
 const loadingDots = ref(0);
+const chatMessages = ref([]);
+const chatContainer = ref(null);
 
 const closeAIResponsePanel = () => {
   updateUISettings({
@@ -36,12 +39,23 @@ const startLoadingAnimation = () => {
       clearInterval(interval);
       return;
     }
-    loadingDots.value = (loadingDots.value + 1) % 4; // 0, 1, 2, 3, then back to 0
+    loadingDots.value = (loadingDots.value + 1) % 4;
   }, 500); // Change every 500ms
 };
 
 const draftReply = async () => {
   if (isGenerating.value) return;
+
+  const prompt = customPrompt.value.trim();
+
+  if (prompt && prompt.length > 0) {
+  chatMessages.value.push({
+    type: 'user',
+    content: prompt,
+    timestamp: new Date()
+  });
+  }
+  await scrollToBottom();
 
   isGenerating.value = true;
   error.value = '';
@@ -50,11 +64,17 @@ const draftReply = async () => {
   startLoadingAnimation();
 
   try {
-    const prompt = customPrompt.value.trim();
     const response = await AIApi.generateResponse(props.conversationId, prompt);
     
     if (response.data.success) {
+      console.log('response.data.response', response.data);
       aiResponse.value = response.data.response;
+      chatMessages.value.push({
+        type: 'ai',
+        content: response.data.response,
+        timestamp: new Date()
+      });
+      await scrollToBottom();
     } else {
       error.value = response.data.error || 'Failed to generate AI response';
     }
@@ -64,16 +84,18 @@ const draftReply = async () => {
     error.value = err.response?.data?.error || 'An error occurred while generating the response';
   } finally {
     isGenerating.value = false;
+    customPrompt.value = ''; // Clear input after sending
   }
 };
 
-const sendDraft = async () => {
-  if (!draftResponse.value.trim()) return;
+const sendDraft = async (messageContent) => {
+  const content = messageContent || draftResponse.value;
+  if (!content.trim()) return;
   
   try {
     await store.dispatch('createPendingMessageAndSend', {
       conversationId: props.conversationId,
-      message: draftResponse.value,
+      message: content,
       private: false, 
     });
     
@@ -83,25 +105,35 @@ const sendDraft = async () => {
   }
 };
 
-const copyToClipboard = async () => {
-  if (!draftResponse.value) return;
+const copyToClipboard = async (messageContent) => {
+  const content = messageContent || draftResponse.value;
+  if (!content) return;
   
   try {
-    await navigator.clipboard.writeText(draftResponse.value);
+    await navigator.clipboard.writeText(content);
     console.log('Response copied to clipboard');
   } catch (err) {
     console.error('Failed to copy to clipboard:', err);
   }
 };
 
-const insertIntoEditor = () => {
-  if (!draftResponse.value) return;
-  emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, draftResponse.value);
+const insertIntoEditor = (messageContent) => {
+  const content = messageContent || draftResponse.value;
+  if (!content) return;
+  emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, content);
+};
+
+const scrollToBottom = async () => {
+  await nextTick();
+  if (chatContainer.value) {
+    chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+  }
 };
 
 const clearDraft = () => {
   aiResponse.value = '';
   customPrompt.value = '';
+  chatMessages.value = [];
 };
 
 const extractDraftResponse = (response) => {
@@ -119,7 +151,8 @@ const extractDraftResponse = (response) => {
 const draftResponse = computed(() => extractDraftResponse(aiResponse.value));
 
 const hasResponse = computed(() => aiResponse.value && aiResponse.value.length > 0);
-const showEmptyState = computed(() => !hasResponse.value && !isGenerating.value && !error.value);
+const hasChatMessages = computed(() => chatMessages.value.length > 0);
+const showEmptyState = computed(() => !hasResponse.value && !hasChatMessages.value && !isGenerating.value && !error.value);
 const loadingText = computed(() => {
   const dots = '.'.repeat(loadingDots.value);
   return `Drafting your reply${dots}`;
@@ -127,115 +160,129 @@ const loadingText = computed(() => {
 </script>
 
 <template>
-  <div class="bg-n-background h-full overflow-hidden flex flex-col fixed top-0 z-40 w-full max-w-sm transition-transform duration-300 ease-in-out ltr:right-0 rtl:left-0 md:static md:w-[320px] md:min-w-[320px] ltr:border-l rtl:border-r border-n-weak 2xl:min-w-[420px] 2xl:w-[420px] shadow-lg md:shadow-none md:flex">
+  <div class="h-full w-full flex flex-col">
     <SidebarActionsHeader
       :title="$t('CONVERSATION.SIDEBAR.AI_RESPONSE')"
       @close="closeAIResponsePanel"
     />
     
-    <div class="flex flex-col h-full p-4 overflow-auto">
-      <!-- Main Content Area -->
-      <div class="flex-1 flex flex-col gap-4">
-        <!-- Empty State - Show Draft Button -->
-        <div v-if="showEmptyState" class="flex-1 flex flex-col items-center justify-end text-center mb-4">
-          <div class="mb-6">
-            <h3 class="text-lg font-medium text-gray-900 mb-2">AI Assistant</h3>
-            <p class="text-sm text-gray-500 mb-6">Get AI-powered help drafting responses to your customers</p>
+    <!-- Remove the nested flex container and combine layouts -->
+    <!-- Header -->
+    <div class="flex items-center gap-3 p-4 border-b border-n-weak flex-shrink-0">
+      <div class="w-8 h-8 bg-n-brand rounded-full flex items-center justify-center">
+        <Icon icon="i-lucide-bot" class="w-4 h-4 text-white" />
+      </div>
+      <div>
+        <h3 class="text-sm font-medium text-n-slate-12">AI Assistant</h3>
+        <p class="text-xs text-n-slate-10">Thread Analysis</p>
+      </div>
+    </div>
+
+    <!-- Chat Area (this takes remaining space) -->
+    <div ref="chatContainer" class="flex-1 min-h-0 overflow-auto p-4 space-y-4">
+      <!-- Chat Messages -->
+      <div v-for="(message, index) in chatMessages" :key="index" class="flex items-start gap-3" :class="{ 'flex-row-reverse': message.type === 'user' }">
+        <!-- User Message -->
+        <div v-if="message.type === 'user'" class="flex-1">
+          <div class="bg-n-brand text-white rounded-lg p-3 ml-auto max-w-[calc(100%-88px)]">
+            <p class="text-sm whitespace-pre-wrap">{{ message.content }}</p>
           </div>
-          
-          <!-- Custom Prompt Input (Optional) -->
-          <div class="w-full mb-2">
-            <label class="block text-xs font-medium text-n-slate-11 mb-2">
-              Custom Prompt (Optional)
-            </label>
-            <textarea
-              v-model="customPrompt"
-              placeholder="Optional custom prompt for the AI to generate a response"
-              class="w-full px-3 py-2 text-sm border border-n-weak rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
-              rows="2"
-            ></textarea>
-          </div>
-          
-          <!-- Draft Reply Button -->
-          <button
-            @click="draftReply"
-            :disabled="isGenerating"
-            class="w-full px-6 py-3 bg-n-brand text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ isGenerating ? 'Drafting...' : 'Draft a reply' }}
-          </button>
+          <Icon icon="i-lucide-user" class="w-4 h-4 bg-n-brand text-white rounded-full" />
         </div>
-
-        <!-- Loading State -->
-        <div v-else-if="isGenerating" class="flex-1 flex flex-col items-center justify-center text-center">
-          <h3 class="text-lg font-medium text-gray-900 mb-2">{{ loadingText }}</h3>
-          <p class="text-sm text-gray-500">AI is analyzing the conversation and crafting a response</p>
-        </div>
-
-        <!-- Draft Display -->
-        <div v-else-if="hasResponse" class="flex-1 flex flex-col items-center">
-          <div class="mb-4">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-medium text-gray-900">AI Draft</h3>
-              <button
-                @click="clearDraft"
-                class="text-xs text-gray-500 hover:text-gray-700"
-              >
-                Clear
-              </button>
-            </div>
-            
-            <!-- Draft Content -->
-            <div class="w-full p-4 bg-gray-400 rounded">
-              <p class="text-sm whitespace-pre-wrap">{{ aiResponse }}</p>
-            </div>
+        
+        <!-- AI Message -->
+        <div v-else class="flex items-start gap-3">
+          <div class="w-8 h-8 bg-n-brand rounded-full flex items-center justify-center flex-shrink-0">
+            <Icon icon="i-lucide-sparkles" class="w-4 h-4 text-white" />
           </div>
-
-          <!-- Action Buttons -->
-          <div class="space-y-3 w-full mt-auto">
-            <button
-              @click="sendDraft"
-              class="w-full px-4 py-2 bg-n-brand text-white rounded-lg font-medium"
-            >
-              Send
-            </button>
-            
-            <div class="flex space-x-2">
+          <div class="bg-n-slate-4 rounded-lg p-3 max-w-[calc(100%-44px)]">
+            <p class="text-sm text-n-slate-12 whitespace-pre-wrap">{{message.content}}</p>
+            <div class="flex gap-2 mt-2 border-t border-n-weak pt-2">
               <button
-                @click="copyToClipboard"
-                class="flex-1 px-4 py-2 bg-n-slate-9/10 text-n-slate-12 rounded-lg font-medium"
+                @click="copyToClipboard(extractDraftResponse(message.content))"
+                class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
+                <Icon icon="i-lucide-copy" class="w-3 h-3" />
                 Copy
               </button>
               <button
-                @click="insertIntoEditor"
-                class="flex-1 px-4 py-2 bg-n-slate-9/10 text-n-slate-12 rounded-lg font-medium"
+                @click="insertIntoEditor(extractDraftResponse(message.content))"
+                class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
+                <Icon icon="i-lucide-message-square" class="w-3 h-3" />
                 Insert
               </button>
+              <button
+                @click="sendDraft(extractDraftResponse(message.content))"
+                class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+              >
+                <Icon icon="i-lucide-send" class="w-3 h-3" />
+                Send
+              </button>
             </div>
-            
-            <button
-              @click="draftReply"
-              :disabled="isGenerating"
-              class="w-full px-4 py-2 border border-n-slate-9/10 text-n-slate-12 rounded-lg font-medium disabled:opacity-50"
-            >
-              Draft Another Reply
-            </button>
           </div>
         </div>
+      </div>
 
-        <!-- Error State -->
-        <div v-else-if="error" class="flex-1 flex flex-col items-center justify-center text-center">
-          <h3 class="text-lg font-medium text-gray-900 mb-2">Something went wrong</h3>
-          <p class="text-sm text-n-slate-12 mb-6">{{ error }}</p>
-          <button
-            @click="draftReply"
-            class="px-6 py-3 bg-n-brand text-white rounded-lg font-medium"
-          >
-            Try Again
-          </button>
+      <!-- Loading State -->
+      <div v-if="isGenerating" class="flex items-start gap-3">
+        <div class="w-8 h-8 bg-n-brand rounded-full flex items-center justify-center flex-shrink-0">
+          <Icon icon="i-lucide-loader-pinwheel" class="w-4 h-4 text-white animate-spin" />
         </div>
+        <div class="bg-n-slate-4 rounded-lg p-3">
+          <p class="text-sm text-n-slate-10">{{ loadingText }}</p>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div v-if="error" class="flex items-start gap-3">
+        <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
+          <Icon icon="i-lucide-alert-triangle" class="w-4 h-4 text-white" />
+        </div>
+        <div class="bg-red-50 rounded-lg p-3">
+          <p class="text-sm text-red-800">{{ error }}</p>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-if="showEmptyState" class="flex flex-col items-center justify-center min-h-full text-center py-8">
+        <div class="w-16 h-16 bg-n-slate-4 rounded-full flex items-center justify-center mb-4">
+          <Icon icon="i-lucide-message-circle" class="w-8 h-8 text-n-slate-10" />
+        </div>
+        <h3 class="text-sm font-medium text-n-slate-12 mb-2">Start a conversation</h3>
+        <p class="text-xs text-n-slate-10">Ask me anything about this conversation or request a draft reply</p>
+      </div>
+    </div>
+
+    <!-- Footer (fixed at bottom) -->
+    <div class="border-t border-n-weak p-4 flex-shrink-0">
+      <!-- Quick Actions -->
+      <div class="mb-3">
+        <button
+          @click="draftReply"
+          :disabled="isGenerating"
+          class="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Icon icon="i-lucide-message-square" class="w-4 h-4 text-n-slate-12" />
+          Draft a reply
+        </button>
+      </div>
+      <!-- Input Area -->
+      <div class="flex gap-2">
+        <input
+          :disabled="isGenerating || true"
+          v-model="customPrompt"
+          type="text"
+          placeholder="Ask me anything..."
+          class="flex-1 px-3 py-2 border !mb-0 border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <button
+          @click="draftReply"
+          :disabled="isGenerating || !customPrompt.trim() || true"
+          class="px-3 py-2 bg-n-brand text-white rounded-lg hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+        >
+          <Icon icon="i-lucide-send" class="w-4 h-4" />
+        </button>
       </div>
     </div>
   </div>
