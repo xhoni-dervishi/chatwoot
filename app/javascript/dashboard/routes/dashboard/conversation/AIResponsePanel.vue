@@ -353,7 +353,7 @@ onMounted(() => {
           @keydown="handleKeyPress"
           :disabled="isGenerating"
           placeholder="Ask me anything about this conversation..."
-          class="flex-1 px-3 py-2 h-4 !mb-0 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          class="flex-1 px-3 py-2 h-12 !mb-0 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows="2"
         />
         <button
