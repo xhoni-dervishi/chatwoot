@@ -205,6 +205,13 @@ const handleKeyPress = (event) => {
 const extractDraftResponse = (response) => {
   if (!response) return '';
   
+  // Check for [DRAFT REPLY] prefix first
+  const draftReplyMatch = response.match(/\[DRAFT REPLY\]\s*(.*)/i);
+  if (draftReplyMatch && draftReplyMatch[1]) {
+    return draftReplyMatch[1]?.trim() || '';
+  }
+  
+  // Fallback to old format
   const draftResponseMatch = response.match(/###\s*Draft Response\s*\n([\s\S]*?)(?=\n###|$)/i);
   
   if (draftResponseMatch && draftResponseMatch[1]) {
@@ -277,14 +284,14 @@ onMounted(() => {
             <p class="text-sm text-n-slate-12 whitespace-pre-wrap">{{ message.content }}</p>
             <div class="flex gap-2 mt-2 border-t border-n-weak pt-2">
               <button
-                @click="copyToClipboard(message.content.includes('Draft Response') ? extractDraftResponse(message.content) : message.content)"
+                @click="copyToClipboard(message.content.includes('[DRAFT REPLY]') || message.content.includes('Draft Response') ? extractDraftResponse(message.content) : message.content)"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
                 <Icon icon="i-lucide-copy" class="w-3 h-3" />
                 Copy
               </button>
               <button
-                v-if="message.content.includes('Draft Response')"
+                v-if="message.content.includes('[DRAFT REPLY]') || message.content.includes('Draft Response')"
                 @click="insertIntoEditor(extractDraftResponse(message.content))"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
@@ -292,7 +299,7 @@ onMounted(() => {
                 Insert
               </button>
               <button
-                v-if="message.content.includes('Draft Response')"
+                v-if="message.content.includes('[DRAFT REPLY]') || message.content.includes('Draft Response')"
                 @click="sendDraft(extractDraftResponse(message.content))"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
               >

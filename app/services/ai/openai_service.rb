@@ -70,6 +70,8 @@ class Ai::OpenaiService
 
         [Context]
         Complete the draft response action. Identify the last message from conversation history, analyze the relevant part from the recent conversation history, summarize and create a plan for support message draft. Always maintain a coherent and professional tone throughout the conversation.
+        
+        IMPORTANT: Pay special attention to messages marked with [MOST RECENT], [VERY RECENT], and [RECENT] as these are the most recent and relevant messages in the conversation. The [MOST RECENT] message is the latest customer message that requires a response.
 
         [Response Guidelines]
         - Use natural, polite, and conversational language that is clear and easy to follow. Keep sentences short and use simple words.
@@ -108,7 +110,7 @@ class Ai::OpenaiService
         Message plan
 
         ### Draft Response
-        Draft
+        [DRAFT REPLY] Draft
 
         [Business Specific Data]
         {
@@ -371,6 +373,9 @@ class Ai::OpenaiService
       model: @model,
       messages: messages,
     }
+
+    Rails.logger.info("OpenAI Chat API request: #{request_body}")
+    Rails.logger.info("OpenAI Chat API request: #{messages}")
     
     request.body = request_body.to_json
     
