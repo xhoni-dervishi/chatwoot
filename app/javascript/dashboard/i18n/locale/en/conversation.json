@@ -252,7 +252,8 @@
     "SIDEBAR": {
       "CONTACT": "Contact",
       "COPILOT": "Copilot",
-      "AI_RESPONSE": "AI Response"
+      "AI_RESPONSE": "AI Response",
+      "CLEAR_CHAT": "Clear Chat"
     }
   },
   "EMAIL_TRANSCRIPT": {

@@ -132,6 +132,31 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_08_123008) do
     t.index ["account_id"], name: "index_agent_capacity_policies_on_account_id"
   end
 
+  create_table "ai_chat_conversations", force: :cascade do |t|
+    t.bigint "conversation_id", null: false
+    t.bigint "user_id", null: false
+    t.string "title", default: "AI Chat", null: false
+    t.jsonb "context", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["conversation_id", "user_id"], name: "idx_ai_chat_conversations_on_conversation_user", unique: true
+    t.index ["conversation_id"], name: "index_ai_chat_conversations_on_conversation_id"
+    t.index ["user_id"], name: "idx_ai_chat_conversations_on_user_id"
+    t.index ["user_id"], name: "index_ai_chat_conversations_on_user_id"
+  end
+
+  create_table "ai_chat_messages", force: :cascade do |t|
+    t.bigint "ai_chat_conversation_id", null: false
+    t.string "role", null: false
+    t.text "content", null: false
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ai_chat_conversation_id", "created_at"], name: "idx_ai_chat_messages_on_conversation_created"
+    t.index ["ai_chat_conversation_id"], name: "idx_ai_chat_messages_on_conversation_id"
+    t.index ["ai_chat_conversation_id"], name: "index_ai_chat_messages_on_ai_chat_conversation_id"
+  end
+
   create_table "ai_conversations", force: :cascade do |t|
     t.bigint "conversation_id", null: false
     t.boolean "ai_enabled", default: false
@@ -1213,6 +1238,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_08_123008) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "ai_chat_conversations", "conversations"
+  add_foreign_key "ai_chat_conversations", "users"
+  add_foreign_key "ai_chat_messages", "ai_chat_conversations"
   add_foreign_key "ai_conversations", "conversations"
   add_foreign_key "inboxes", "portals"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).

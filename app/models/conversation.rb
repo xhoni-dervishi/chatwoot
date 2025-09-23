@@ -110,6 +110,7 @@ class Conversation < ApplicationRecord
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
   has_one :ai_conversation, dependent: :destroy_async
+  has_many :ai_chat_conversations, dependent: :destroy_async
 
   before_save :ensure_snooze_until_reset
   before_create :determine_conversation_status

@@ -33,9 +33,10 @@ class Api::V1::Accounts::Conversations::AiController < Api::V1::Accounts::Conver
   #       "error": "An unexpected error occurred while generating AI response"
   #     }
   def generate_response
-    custom_prompt = params[:customPrompt] || ''
     service = Ai::ResponseGeneratorService.new(@conversation)
-    response = service.generate_response(custom_prompt)
+    response = service.generate_response('')
+    
+    save_draft_messages_to_chat(response)
     
     render json: {
       success: true,
@@ -57,8 +58,28 @@ class Api::V1::Accounts::Conversations::AiController < Api::V1::Accounts::Conver
 
   private
 
+  def save_draft_messages_to_chat(ai_response)
+    ai_chat_conversation = AiChatConversation.find_or_create_by(
+      conversation: @conversation,
+      user: current_user
+    ) do |chat_conv|
+      chat_conv.title = "AI Chat - #{@conversation.contact.name}"
+    end
+
+    ai_chat_conversation.add_message(
+      role: 'user',
+      content: 'Draft a reply'
+    )
+
+    ai_chat_conversation.add_message(
+      role: 'assistant',
+      content: ai_response
+    )
+  rescue StandardError => e
+    Rails.logger.error "Failed to save draft messages to chat: #{e.message}"
+  end
+
   def ensure_ai_enabled
-    # Check if AI is enabled for this conversation
     ai_conversation = @conversation.ai_conversation
     unless ai_conversation&.ai_enabled?
       render json: {

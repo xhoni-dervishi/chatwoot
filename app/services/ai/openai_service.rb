@@ -18,11 +18,16 @@ class Ai::OpenaiService
 
     extract_response_text(response)
   rescue StandardError => e
-    Rails.logger.error "=== OpenAI API Error Debug ==="
-    Rails.logger.error "Error class: #{e.class}"
-    Rails.logger.error "Error message: #{e.message}"
-    Rails.logger.error "Error backtrace: #{e.backtrace.first(5).join("\n")}"
+    Rails.logger.error "OpenAI API Error: #{e.message}"
     raise Ai::OpenaiService::ApiError, "Failed to generate AI response: #{e.message}"
+  end
+
+  def generate_chat_response(messages)
+    response = make_chat_api_call(messages)
+    extract_chat_response_text(response)
+  rescue StandardError => e
+    Rails.logger.error "OpenAI Chat API Error: #{e.message}"
+    raise Ai::OpenaiService::ApiError, "Failed to generate AI chat response: #{e.message}"
   end
 
   private
@@ -299,12 +304,7 @@ class Ai::OpenaiService
     
     request.body = request_body.to_json
     
-    Rails.logger.info "OpenAI /response API request body: #{request_body.to_json}"
-    
-    start_time = Time.current
     response = http.request(request)
-    end_time = Time.current
-    Rails.logger.info "OpenAI /response API request time: #{end_time - start_time} seconds"
     
     response
   end
@@ -320,10 +320,8 @@ class Ai::OpenaiService
   end
 
   def extract_response_text(response)
-    Rails.logger.info "OpenAI /responses API response: #{response.body}"
-    
     if response.code != '200'
-      Rails.logger.error "HTTP Error: #{response.code} - #{response.message}"
+      Rails.logger.error "OpenAI API HTTP Error: #{response.code} - #{response.message}"
       raise ApiError, "HTTP Error: #{response.code} - #{response.message}"
     end
     
@@ -355,6 +353,56 @@ class Ai::OpenaiService
     
     Rails.logger.error "No valid content found in response: #{response_body}"
     raise ApiError, 'No valid content found in OpenAI response'
+  end
+
+  def make_chat_api_call(messages)
+    require 'net/http'
+    require 'uri'
+    
+    uri = URI("#{@endpoint}/chat/completions")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    
+    request = Net::HTTP::Post.new(uri)
+    request['Content-Type'] = 'application/json'
+    request['Authorization'] = "Bearer #{@api_key}"
+    
+    request_body = {
+      model: @model,
+      messages: messages,
+    }
+    
+    request.body = request_body.to_json
+    
+    response = http.request(request)
+    
+    response
+  end
+
+  def extract_chat_response_text(response)
+    if response.code != '200'
+      Rails.logger.error "OpenAI Chat API HTTP Error: #{response.code} - #{response.message}"
+      raise ApiError, "HTTP Error: #{response.code} - #{response.message}"
+    end
+    
+    response_body = JSON.parse(response.body)
+    
+    if response_body['error']
+      error_message = response_body.dig('error', 'message') || 'Unknown OpenAI API error'
+      Rails.logger.error "OpenAI API error: #{error_message}"
+      raise ApiError, "OpenAI API error: #{error_message}"
+    end
+    
+    choices = response_body['choices']
+    if choices && choices.is_a?(Array) && choices.any?
+      message = choices.first['message']
+      if message && message['content']
+        return message['content']
+      end
+    end
+    
+    Rails.logger.error "No valid content found in chat response: #{response_body}"
+    raise ApiError, 'No valid content found in OpenAI chat response'
   end
 
   class ApiError < StandardError; end

@@ -121,6 +121,9 @@ Rails.application.routes.draw do
               resource :direct_uploads, only: [:create]
               resource :draft_messages, only: [:show, :update, :destroy]
               post :ai_generate_response, to: 'ai#generate_response'
+              post :ai_chat_send_message, to: 'ai_chat#send_message'
+              get :ai_chat_history, to: 'ai_chat#get_history'
+              delete :ai_chat_clear_history, to: 'ai_chat#clear_history'
             end
             member do
               post :mute
