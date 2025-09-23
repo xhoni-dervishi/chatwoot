@@ -275,15 +275,16 @@ onMounted(() => {
           </div>
           <div class="bg-n-slate-4 rounded-lg p-3 max-w-[calc(100%-44px)]">
             <p class="text-sm text-n-slate-12 whitespace-pre-wrap">{{ message.content }}</p>
-            <div v-if="message.content.includes('Draft Response')" class="flex gap-2 mt-2 border-t border-n-weak pt-2">
+            <div class="flex gap-2 mt-2 border-t border-n-weak pt-2">
               <button
-                @click="copyToClipboard(extractDraftResponse(message.content))"
+                @click="copyToClipboard(message.content.includes('Draft Response') ? extractDraftResponse(message.content) : message.content)"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
                 <Icon icon="i-lucide-copy" class="w-3 h-3" />
                 Copy
               </button>
               <button
+                v-if="message.content.includes('Draft Response')"
                 @click="insertIntoEditor(extractDraftResponse(message.content))"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
@@ -291,6 +292,7 @@ onMounted(() => {
                 Insert
               </button>
               <button
+                v-if="message.content.includes('Draft Response')"
                 @click="sendDraft(extractDraftResponse(message.content))"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
               >
