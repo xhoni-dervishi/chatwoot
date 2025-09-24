@@ -1,6 +1,6 @@
 class Ai::ConversationContextService
   DEFAULT_MAX_MESSAGES = 25
-  RECENT_MESSAGES_WEIGHT = 3
+  RECENT_MESSAGES_WEIGHT = 5
 
   def initialize(conversation)
     @conversation = conversation
@@ -30,9 +30,8 @@ class Ai::ConversationContextService
                  .includes(:sender)
                  .where(message_type: ['incoming', 'outgoing'])
                  .where.not(content: [nil, ''])
-                 .order(created_at: :desc)
+                 .order(created_at: :asc)
                  .limit(max_messages)
-                 .reverse
   end
 
   def format_messages_for_ai(messages)
