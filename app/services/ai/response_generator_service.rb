@@ -10,12 +10,16 @@ class Ai::ResponseGeneratorService
     context = @context_service.build_context
     validate_context(context)
     
-    @openai_service.generate_response(context, custom_prompt)
+    response = @openai_service.generate_response(context, custom_prompt)
+    
+    response
   rescue Ai::OpenaiService::ApiError => e
-    Rails.logger.error "AI Response Generation Failed: #{e.message}"
+    Rails.logger.error "[AI Response] Generation Failed for conversation #{@conversation.id}: #{e.message}"
+    Rails.logger.error e.backtrace.join("\n") if e.backtrace
     raise Ai::ResponseGeneratorService::GenerationError, e.message
   rescue StandardError => e
-    Rails.logger.error "Unexpected error in AI response generation: #{e.message}"
+    Rails.logger.error "[AI Response] Unexpected error for conversation #{@conversation.id}: #{e.message}"
+    Rails.logger.error e.backtrace.join("\n") if e.backtrace
     raise Ai::ResponseGeneratorService::GenerationError, "Failed to generate AI response"
   end
 

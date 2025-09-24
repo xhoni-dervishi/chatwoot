@@ -1,6 +1,6 @@
 class Ai::ConversationContextService
-  DEFAULT_MAX_MESSAGES = 25  # Increased from 15 to provide better context
-  RECENT_MESSAGES_WEIGHT = 3  # Number of recent messages to emphasize
+  DEFAULT_MAX_MESSAGES = 25
+  RECENT_MESSAGES_WEIGHT = 3
 
   def initialize(conversation)
     @conversation = conversation
@@ -8,7 +8,17 @@ class Ai::ConversationContextService
 
   def build_context
     messages = fetch_recent_messages
-    format_messages_for_ai(messages)
+    Rails.logger.info "[AI Context] Building context with #{messages.length} messages for conversation #{@conversation.id}"
+    
+    formatted_messages = format_messages_for_ai(messages)
+    
+    recent_messages = formatted_messages.last(3)
+    Rails.logger.debug "[AI Context] Most recent messages for conversation #{@conversation.id}:"
+    recent_messages.each_with_index do |msg, idx|
+      Rails.logger.debug "[AI Context] #{idx + 1}. #{msg[:role]}: #{msg[:content][0..100]}..."
+    end
+    
+    formatted_messages
   end
 
   private
@@ -29,9 +39,10 @@ class Ai::ConversationContextService
     messages.map.with_index do |message, index|
       content = format_message_content(message)
       
-      # Add importance weighting for recent messages
+      # Add importance weighting for recent messages (last messages in the array are most recent)
       if index >= messages.length - RECENT_MESSAGES_WEIGHT
-        content = add_importance_marker(content, messages.length - index)
+        importance_level = messages.length - index
+        content = add_importance_marker(content, importance_level)
       end
       
       {
