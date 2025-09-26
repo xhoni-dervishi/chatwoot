@@ -63,12 +63,6 @@ export default defineConfig({
             }
           : {}),
         inlineDynamicImports: isLibraryMode, // Disable code-splitting for SDK
-        // Memory optimization - chunk splitting for better memory usage
-        manualChunks: !isLibraryMode ? {
-          vendor: ['vue'],
-          dashboard: ['app/javascript/dashboard'],
-          widget: ['app/javascript/widget'],
-        } : undefined,
       },
     },
     lib: isLibraryMode

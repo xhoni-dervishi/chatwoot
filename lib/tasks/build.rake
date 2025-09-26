@@ -6,6 +6,8 @@ task before_assets_precompile: :environment do
   system('echo "-------------- Bulding SDK for Production --------------"')
   system('pnpm run build:sdk')
   system('echo "-------------- Bulding App for Production --------------"')
+  # Use memory-optimized build for Heroku
+  system('NODE_OPTIONS="--max-old-space-size=4096" vite build')
 end
 
 # every time you execute 'rake assets:precompile'
