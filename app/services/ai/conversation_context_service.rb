@@ -27,7 +27,7 @@ class Ai::ConversationContextService
     max_messages = get_max_messages
     
     @conversation.messages
-                 .includes(:sender)
+                 .includes(:sender, attachments: :file_attachment)
                  .where(message_type: ['incoming', 'outgoing'])
                  .where.not(content: [nil, ''])
                  .order(created_at: :asc)
@@ -38,18 +38,41 @@ class Ai::ConversationContextService
     messages.map.with_index do |message, index|
       content = format_message_content(message)
       
-      # Add importance weighting for recent messages (last messages in the array are most recent)
       if index >= messages.length - RECENT_MESSAGES_WEIGHT
         importance_level = messages.length - index
         content = add_importance_marker(content, importance_level)
       end
       
-      {
+      message_data = {
         role: determine_role(message),
         content: content,
         sender: message.sender.name,
         timestamp: message.created_at.iso8601
       }
+      
+      image_attachments = message.attachments.select(&:image?)
+      if image_attachments.any?
+        message_data[:images] = image_attachments.map do |attachment|
+          {
+            url: attachment.download_url,
+            filename: attachment.file.filename.to_s,
+            content_type: attachment.file.content_type
+          }
+        end
+      end
+      
+      file_attachments = message.attachments.select(&:file?)
+      if file_attachments.any?
+        message_data[:files] = file_attachments.map do |attachment|
+          {
+            url: attachment.download_url,
+            filename: attachment.file.filename.to_s,
+            content_type: attachment.file.content_type
+          }
+        end
+      end
+      
+      message_data
     end
   end
 

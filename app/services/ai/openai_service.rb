@@ -277,10 +277,49 @@ class Ai::OpenaiService
 
   def build_conversation_messages(conversation_context)
     conversation_context.map do |message|
+      content = build_message_content(message)
       {
         role: message[:role],
-        content: message[:content]
+        content: content
       }
+    end
+  end
+
+  def build_message_content(message)
+    has_images = message[:images] && message[:images].any?
+    has_files = message[:files] && message[:files].any?
+    
+    if has_images || has_files
+      content_array = []
+      
+      if message[:content].present?
+        content_array << {
+          type: "input_text",
+          text: message[:content]
+        }
+      end
+      
+      if has_images
+        message[:images].each do |image|
+          content_array << {
+            type: "input_image",
+            image_url: image[:url]
+          }
+        end
+      end
+      
+      if has_files
+        message[:files].each do |file|
+          content_array << {
+            type: "input_file",
+            file_url: file[:url]
+          }
+        end
+      end
+      
+      content_array
+    else
+      message[:content]
     end
   end
 
@@ -318,7 +357,17 @@ class Ai::OpenaiService
 
   def convert_messages_to_input(messages)
     non_system_messages = messages.reject { |msg| msg[:role] == 'system' }
-    non_system_messages.map { |msg| "#{msg[:role]}: #{msg[:content]}" }.join("\n")
+    non_system_messages.map do |msg|
+      if msg[:content].is_a?(Array)
+        {
+          role: msg[:role],
+          content: msg[:content]
+        }
+      else
+        # Text format
+        "#{msg[:role]}: #{msg[:content]}"
+      end
+    end
   end
 
   def extract_response_text(response)
