@@ -45,6 +45,8 @@ if (isLibraryMode) {
 export default defineConfig({
   plugins: plugins,
   build: {
+    // Memory optimization for Heroku
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
         // [NOTE] when not in library mode, no new keys will be addedd or overwritten
@@ -61,6 +63,12 @@ export default defineConfig({
             }
           : {}),
         inlineDynamicImports: isLibraryMode, // Disable code-splitting for SDK
+        // Memory optimization - chunk splitting for better memory usage
+        manualChunks: !isLibraryMode ? {
+          vendor: ['vue'],
+          dashboard: ['app/javascript/dashboard'],
+          widget: ['app/javascript/widget'],
+        } : undefined,
       },
     },
     lib: isLibraryMode

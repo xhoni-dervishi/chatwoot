@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Heroku build script with memory optimization
+echo "Starting Heroku build with memory optimization..."
+
+# Set Node.js memory limit
+export NODE_OPTIONS="--max-old-space-size=4096"
+
+# Build with Vite
+echo "Building assets with Vite..."
+npm run build:heroku
+
+echo "Build completed successfully!"
