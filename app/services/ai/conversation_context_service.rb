@@ -26,15 +26,17 @@ class Ai::ConversationContextService
   def fetch_recent_messages
     max_messages = get_max_messages
     
+    # Include messages that have content OR have attachments
     @conversation.messages
                  .includes(:sender, attachments: :file_attachment)
                  .where(message_type: ['incoming', 'outgoing'])
-                 .where.not(content: [nil, ''])
+                 .where('content IS NOT NULL AND content != ? OR id IN (SELECT DISTINCT message_id FROM attachments WHERE message_id = messages.id)', '')
                  .order(created_at: :asc)
                  .limit(max_messages)
   end
 
   def format_messages_for_ai(messages)
+    Rails.logger.info "[AI Context] Processing #{messages.count} messages for AI context"
     messages.map.with_index do |message, index|
       content = format_message_content(message)
       
@@ -50,8 +52,15 @@ class Ai::ConversationContextService
         timestamp: message.created_at.iso8601
       }
       
+      # Debug: Log attachment information
+      Rails.logger.info "[AI Context] Message #{message.id} has #{message.attachments.count} attachments"
+      message.attachments.each do |attachment|
+        Rails.logger.info "[AI Context] Attachment: #{attachment.file_type} - #{attachment.file.filename if attachment.file.attached?}"
+      end
+      
       image_attachments = message.attachments.select(&:image?)
       if image_attachments.any?
+        Rails.logger.info "[AI Context] Found #{image_attachments.count} image attachments in message #{message.id}"
         message_data[:images] = image_attachments.map do |attachment|
           {
             url: attachment.download_url,
@@ -63,6 +72,7 @@ class Ai::ConversationContextService
       
       file_attachments = message.attachments.select(&:file?)
       if file_attachments.any?
+        Rails.logger.info "[AI Context] Found #{file_attachments.count} file attachments in message #{message.id}"
         message_data[:files] = file_attachments.map do |attachment|
           {
             url: attachment.download_url,
@@ -89,6 +99,11 @@ class Ai::ConversationContextService
 
   def format_message_content(message)
     content = message.content.to_s.strip
+    
+    # If content is empty but has attachments, use a placeholder
+    if content.empty? && message.attachments.any?
+      content = "[Image/File attached]"
+    end
     
     # Add sender context for better AI understanding
     if message.message_type == 'incoming'

@@ -76,7 +76,10 @@ class Ai::ChatService
       }
     end
 
-    [system_message] + conversation_context + chat_history
+    # Process conversation context through OpenAI service to handle images/files
+    processed_context = @openai_service.send(:build_conversation_messages, conversation_context)
+    
+    [system_message] + processed_context + chat_history
   end
 
   def build_chat_system_message

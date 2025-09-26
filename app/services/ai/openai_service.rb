@@ -276,7 +276,9 @@ class Ai::OpenaiService
   end
 
   def build_conversation_messages(conversation_context)
+    Rails.logger.info "[AI OpenAI] Building conversation messages from #{conversation_context.count} context items"
     conversation_context.map do |message|
+      Rails.logger.info "[AI OpenAI] Processing message: #{message[:role]} - #{message[:content]} - Images: #{message[:images]&.count || 0}"
       content = build_message_content(message)
       {
         role: message[:role],
@@ -288,6 +290,11 @@ class Ai::OpenaiService
   def build_message_content(message)
     has_images = message[:images] && message[:images].any?
     has_files = message[:files] && message[:files].any?
+    
+    Rails.logger.info "[AI OpenAI] Processing message: has_images=#{has_images}, has_files=#{has_files}"
+    Rails.logger.info "[AI OpenAI] Message content: #{message[:content]}"
+    Rails.logger.info "[AI OpenAI] Message images: #{message[:images]}" if has_images
+    Rails.logger.info "[AI OpenAI] Message files: #{message[:files]}" if has_files
     
     if has_images || has_files
       content_array = []
@@ -301,6 +308,7 @@ class Ai::OpenaiService
       
       if has_images
         message[:images].each do |image|
+          Rails.logger.info "[AI OpenAI] Adding image: #{image[:url]}"
           content_array << {
             type: "input_image",
             image_url: image[:url]
@@ -310,6 +318,7 @@ class Ai::OpenaiService
       
       if has_files
         message[:files].each do |file|
+          Rails.logger.info "[AI OpenAI] Adding file: #{file[:url]}"
           content_array << {
             type: "input_file",
             file_url: file[:url]
@@ -342,11 +351,14 @@ class Ai::OpenaiService
       input: input_text,
       instructions: extract_system_instructions(messages)
     }
+
+    Rails.logger.info "OpenAI API Request Body: #{request_body.to_json}"
     
     request.body = request_body.to_json
     
     response = http.request(request)
-    
+
+    Rails.logger.info "OpenAI API Response: #{response.body}"
     response
   end
 
@@ -358,15 +370,10 @@ class Ai::OpenaiService
   def convert_messages_to_input(messages)
     non_system_messages = messages.reject { |msg| msg[:role] == 'system' }
     non_system_messages.map do |msg|
-      if msg[:content].is_a?(Array)
-        {
-          role: msg[:role],
-          content: msg[:content]
-        }
-      else
-        # Text format
-        "#{msg[:role]}: #{msg[:content]}"
-      end
+      {
+        role: msg[:role],
+        content: msg[:content]
+      }
     end
   end
 
