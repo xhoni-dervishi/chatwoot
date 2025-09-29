@@ -290,8 +290,9 @@ class Ai::OpenaiService
   def build_message_content(message)
     has_images = message[:images] && message[:images].any?
     has_files = message[:files] && message[:files].any?
+    role = message[:role]
     
-    Rails.logger.info "[AI OpenAI] Processing message: has_images=#{has_images}, has_files=#{has_files}"
+    Rails.logger.info "[AI OpenAI] Processing message: has_images=#{has_images}, has_files=#{has_files}, role=#{role}"
     Rails.logger.info "[AI OpenAI] Message content: #{message[:content]}"
     Rails.logger.info "[AI OpenAI] Message images: #{message[:images]}" if has_images
     Rails.logger.info "[AI OpenAI] Message files: #{message[:files]}" if has_files
@@ -300,13 +301,14 @@ class Ai::OpenaiService
       content_array = []
       
       if message[:content].present?
+        text_type = role == 'assistant' ? 'output_text' : 'input_text'
         content_array << {
-          type: "input_text",
+          type: text_type,
           text: message[:content]
         }
       end
       
-      if has_images
+      if has_images && role == 'user'
         message[:images].each do |image|
           Rails.logger.info "[AI OpenAI] Adding image: #{image[:url]}"
           content_array << {
@@ -316,7 +318,7 @@ class Ai::OpenaiService
         end
       end
       
-      if has_files
+      if has_files && role == 'user'
         message[:files].each do |file|
           Rails.logger.info "[AI OpenAI] Adding file: #{file[:url]}"
           content_array << {
