@@ -26,7 +26,6 @@ class Ai::ConversationContextService
   def fetch_recent_messages
     max_messages = get_max_messages
     
-    # Include messages that have content OR have attachments
     @conversation.messages
                  .includes(:sender, attachments: :file_attachment)
                  .where(message_type: ['incoming', 'outgoing'])
@@ -52,13 +51,37 @@ class Ai::ConversationContextService
         timestamp: message.created_at.iso8601
       }
       
-      # Debug: Log attachment information
       Rails.logger.info "[AI Context] Message #{message.id} has #{message.attachments.count} attachments"
       message.attachments.each do |attachment|
         Rails.logger.info "[AI Context] Attachment: #{attachment.file_type} - #{attachment.file.filename if attachment.file.attached?}"
       end
       
-      image_attachments = message.attachments.select(&:image?)
+      image_attachments = []
+      file_attachments = []
+      
+      message.attachments.each do |attachment|
+        if attachment.file.attached?
+          filename = attachment.file.filename.to_s.downcase
+          content_type = attachment.file.content_type
+          
+          # Check if it's an image by both content type and file extension
+          is_image = is_image_file?(content_type, filename)
+          
+          # Check if it's a PDF file
+          is_pdf = is_pdf_file?(content_type, filename)
+          
+          if is_image
+            image_attachments << attachment
+            Rails.logger.info "[AI Context] Classified as image: #{filename} (#{content_type})"
+          elsif is_pdf
+            file_attachments << attachment
+            Rails.logger.info "[AI Context] Classified as PDF file: #{filename} (#{content_type})"
+          else
+            Rails.logger.info "[AI Context] Skipping unsupported file type: #{filename} (#{content_type})"
+          end
+        end
+      end
+      
       if image_attachments.any?
         Rails.logger.info "[AI Context] Found #{image_attachments.count} image attachments in message #{message.id}"
         message_data[:images] = image_attachments.map do |attachment|
@@ -70,7 +93,6 @@ class Ai::ConversationContextService
         end
       end
       
-      file_attachments = message.attachments.select(&:file?)
       if file_attachments.any?
         Rails.logger.info "[AI Context] Found #{file_attachments.count} file attachments in message #{message.id}"
         message_data[:files] = file_attachments.map do |attachment|
@@ -89,9 +111,9 @@ class Ai::ConversationContextService
   def determine_role(message)
     case message.message_type
     when 'incoming'
-      'user'  # Customer message
+      'user'
     when 'outgoing'
-      'assistant'  # Agent response
+      'assistant'
     else
       'user'
     end
@@ -100,12 +122,10 @@ class Ai::ConversationContextService
   def format_message_content(message)
     content = message.content.to_s.strip
     
-    # If content is empty but has attachments, use a placeholder
     if content.empty? && message.attachments.any?
       content = "[Image/File attached]"
     end
     
-    # Add sender context for better AI understanding
     if message.message_type == 'incoming'
       "#{message.sender.name}: #{content}"
     else
@@ -114,7 +134,6 @@ class Ai::ConversationContextService
   end
 
   def add_importance_marker(content, importance_level)
-    # Add markers to indicate message importance to AI
     case importance_level
     when 1
       "[MOST RECENT] #{content}"
@@ -132,7 +151,35 @@ class Ai::ConversationContextService
   end
 
   def get_max_messages
-    # Allow configuration via GlobalConfigService
     GlobalConfigService.load('AI_MAX_CONTEXT_MESSAGES', DEFAULT_MAX_MESSAGES).to_i
+  end
+
+  def is_image_file?(content_type, filename)
+    image_content_types = [
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp'
+    ]
+    
+    image_extensions = ['.png', '.jpeg', '.jpg', '.webp', '.gif', '.bmp']
+    
+    content_type_match = image_content_types.include?(content_type&.downcase)
+    extension_match = image_extensions.any? { |ext| filename.end_with?(ext) }
+    
+    content_type_match && extension_match
+  end
+
+  def is_pdf_file?(content_type, filename)
+    pdf_content_types = ['application/pdf']
+    
+    pdf_extensions = ['.pdf']
+    
+    content_type_match = pdf_content_types.include?(content_type&.downcase)
+    extension_match = pdf_extensions.any? { |ext| filename.end_with?(ext) }
+    
+    content_type_match && extension_match
   end
 end
