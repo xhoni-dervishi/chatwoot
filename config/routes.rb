@@ -131,6 +131,12 @@ Rails.application.routes.draw do
               post :ai_chat_send_message, to: 'ai_chat#send_message'
               get :ai_chat_history, to: 'ai_chat#get_history'
               delete :ai_chat_clear_history, to: 'ai_chat#clear_history'
+              post :ai_chat_schedule_followup, to: 'ai_chat#schedule_followup'
+              post :ai_chat_create_followup, to: 'ai_chat#create_followup'
+              put :ai_chat_update_followup_draft, to: 'ai_chat#update_followup_draft'
+              put :ai_chat_update_followup_time, to: 'ai_chat#update_followup_time'
+              get :ai_chat_existing_followups, to: 'ai_chat#existing_followups'
+              delete 'ai_chat_cancel_followup/:id', to: 'ai_chat#cancel_followup', as: :ai_chat_cancel_followup
             end
             member do
               post :mute
