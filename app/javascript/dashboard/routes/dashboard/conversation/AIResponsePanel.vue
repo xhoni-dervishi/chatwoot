@@ -178,6 +178,12 @@ const confirmDraftMessage = async (messageId) => {
       };
       
       // Add AI response with time options
+      console.log('Setting up time editing with data:', {
+        draftMessage: message.followUpData.draftMessage,
+        suggestedTime: message.followUpData.suggestedTime,
+        followUpData: message.followUpData
+      });
+      
       chatMessages.value.push({
         id: `followup-time-${Date.now()}`,
         role: 'assistant',
@@ -229,6 +235,13 @@ const confirmTimeSelection = async (messageId) => {
   const message = chatMessages.value.find(m => m.id === messageId);
   if (!message?.followUpData) return;
 
+  console.log('confirmTimeSelection called with message:', {
+    messageId,
+    followUpData: message.followUpData,
+    draftMessage: message.followUpData.draftMessage,
+    scheduledTime: message.followUpData.scheduledTime
+  });
+
   isGenerating.value = true;
   startLoadingAnimation();
 
@@ -247,6 +260,17 @@ const confirmTimeSelection = async (messageId) => {
       
       content += `\nWould you like to replace the existing follow-up${followups.length > 1 ? 's' : ''} with this new one?`;
 
+      // Get the message content from the appropriate field based on message type
+      const messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
+      const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
+
+      console.log('Creating newFollowup object with:', {
+        message: messageContent,
+        scheduledTime: scheduledTime,
+        followUpId: message.followUpData.followUpId,
+        messageType: message.followUpData.type
+      });
+
       chatMessages.value.push({
         id: `followup-existing-check-${Date.now()}`,
         role: 'assistant',
@@ -256,18 +280,28 @@ const confirmTimeSelection = async (messageId) => {
           type: 'existing_followups_confirmation',
           existingFollowups: followups,
           newFollowup: {
-            message: message.followUpData.draftMessage,
-            scheduledTime: message.followUpData.scheduledTime,
+            message: messageContent,
+            scheduledTime: scheduledTime,
             followUpId: message.followUpData.followUpId
           }
         }
       });
     } else {
       // No existing follow-ups, create the new follow-up
+      const messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
+      const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
+
+      console.log('Creating follow-up with data:', {
+        conversationId: props.conversationId,
+        messageContent: messageContent,
+        scheduledTime: scheduledTime,
+        followUpData: message.followUpData
+      });
+      
       const response = await AiChatAPI.createFollowup(
         props.conversationId,
-        message.followUpData.currentMessage,
-        message.followUpData.currentTime
+        messageContent,
+        scheduledTime
       );
 
       if (response.data.success) {
@@ -354,6 +388,12 @@ const replaceExistingFollowups = async (messageId) => {
   const message = chatMessages.value.find(m => m.id === messageId);
   if (!message?.followUpData) return;
 
+  console.log('replaceExistingFollowups called with:', {
+    messageId,
+    followUpData: message.followUpData,
+    newFollowup: message.followUpData.newFollowup
+  });
+
   isGenerating.value = true;
   startLoadingAnimation();
 
@@ -369,6 +409,12 @@ const replaceExistingFollowups = async (messageId) => {
     }
 
     // Create the new follow-up
+    console.log('Creating new follow-up with:', {
+      conversationId: props.conversationId,
+      message: message.followUpData.newFollowup.message,
+      scheduledTime: message.followUpData.newFollowup.scheduledTime
+    });
+
     const response = await AiChatAPI.createFollowup(
       props.conversationId,
       message.followUpData.newFollowup.message,
@@ -692,13 +738,11 @@ const handleKeyPress = (event) => {
 const extractDraftResponse = (response) => {
   if (!response) return '';
   
-  // Check for [DRAFT REPLY] prefix first
-  const draftReplyMatch = response.match(/\[DRAFT REPLY\]\s*(.*)/i);
+  const draftReplyMatch = response.match(/\[DRAFT REPLY\]\s*([\s\S]*?)(?=\n###|\[|$)/i);
   if (draftReplyMatch && draftReplyMatch[1]) {
     return draftReplyMatch[1]?.trim() || '';
   }
   
-  // Fallback to old format
   const draftResponseMatch = response.match(/###\s*Draft Response\s*\n([\s\S]*?)(?=\n###|$)/i);
   
   if (draftResponseMatch && draftResponseMatch[1]) {

@@ -67,8 +67,8 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
       if result[:success]
         render json: {
           success: true,
-          user_message: format_message(result[:user_message]),
-          ai_message: format_message(result[:ai_message])
+          user_message: result[:user_message],
+          ai_message: result[:ai_message]
         }
       else
         render json: {
@@ -413,6 +413,25 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
 
   private
 
+  def extractDraftResponse(response)
+    return '' if response.blank?
+    
+    # Check for [DRAFT REPLY] prefix first - stop at ### or [ characters
+    draft_reply_match = response.match(/\[DRAFT REPLY\]\s*([\s\S]*?)(?=\n###|\[|$)/i)
+    if draft_reply_match && draft_reply_match[1]
+      return draft_reply_match[1]&.strip || ''
+    end
+    
+    # Fallback to old format
+    draft_response_match = response.match(/###\s*Draft Response\s*\n([\s\S]*?)(?=\n###|$)/i)
+    
+    if draft_response_match && draft_response_match[1]
+      return draft_response_match[1]&.strip || ''
+    end
+    
+    response
+  end
+
   def handle_follow_up_message(message)
     # In follow-up mode, we need to determine what the user is trying to do
     # based on the message content and current context
@@ -423,7 +442,14 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
        message.downcase.include?('longer') ||
        message.downcase.include?('change') ||
        message.downcase.include?('edit') ||
-       message.downcase.include?('make it')
+       message.downcase.include?('make it') ||
+       message.downcase.include?('less formal') ||
+       message.downcase.include?('more formal') ||
+       message.downcase.include?('casual') ||
+       message.downcase.include?('professional') ||
+       message.downcase.include?('friendly') ||
+       message.downcase.include?('add') ||
+       message.downcase.include?('remove')
       handle_draft_editing_instruction(message)
     # Check if this is a time editing instruction
     elsif message.downcase.include?('minutes') || 
@@ -439,52 +465,83 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
   end
 
   def handle_draft_editing_instruction(message)
-    # Use AI to generate an updated follow-up message based on the instruction
-    service = Ai::FollowUpSchedulingService.new(@conversation, @user)
+    # Get the conversation context for the AI
+    conversation_context = @conversation.messages.where.not(message_type: :activity).order(:created_at).last(5)
+    context_text = conversation_context.map { |msg| 
+      sender = msg.sender_type == 'Contact' ? msg.sender.name : 'Agent'
+      "[#{msg.created_at.strftime('%Y-%m-%d %H:%M')}] #{sender}: #{msg.content}"
+    }.join("\n")
     
-    # Get the current conversation context to understand what we're following up on
-    last_message = @conversation.messages.where.not(message_type: :activity).order(:created_at).last
-    context = "The last message was: \"#{last_message&.content}\""
+    # Create a focused prompt for editing the follow-up message
+    prompt = <<~PROMPT
+      You are helping an agent edit a follow-up message for a customer conversation. 
+      
+      Conversation context:
+      #{context_text}
+      
+      The agent wants to edit the follow-up message with this instruction: "#{message}"
+      
+      Please respond with a JSON object containing the updated follow-up message and suggested time.
+      The JSON should have this structure:
+      {
+        "message": "The updated follow-up message text",
+        "time": "2025-10-01T10:00:00Z"
+      }
+      
+      The message should be customer-facing and professional.
+      The time should be in ISO 8601 format, defaulting to 24 hours from now if not specified.
+      
+      Return ONLY the JSON object, no other text.
+    PROMPT
     
-    # Generate a follow-up message based on the user's instruction
-    conversation_context = [{
-      role: 'system',
-      content: "You are a helpful assistant that writes professional follow-up messages for customer service conversations."
-    }, {
-      role: 'user', 
-      content: "Based on this conversation context: #{context}\n\nPlease write a follow-up message that is #{message.downcase}. Make it professional and helpful."
-    }]
-    
-    # Use the AI service to generate the updated message
+    # Use OpenAI service directly without saving to conversation
     ai_service = Ai::OpenaiService.new
-    ai_response = ai_service.generate_response(conversation_context, "Write a follow-up message")
     
-    # Extract just the draft message from the AI response
-    # The AI returns a formatted response, we need to extract the actual draft
-    if ai_response.include?('[DRAFT REPLY]')
-      updated_message = ai_response.split('[DRAFT REPLY]').last.strip
-    else
-      # Fallback: use the entire response if no draft marker found
-      updated_message = ai_response
+    # Create properly formatted messages for the AI
+    messages = [
+      {
+        role: 'system',
+        content: prompt
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ]
+    
+    ai_response = ai_service.generate_chat_response(messages)
+    
+    # Parse the JSON response from AI
+    begin
+      followup_data = JSON.parse(ai_response.strip)
+      updated_message = followup_data['message']
+      suggested_time = followup_data['time'] || 24.hours.from_now.iso8601
+    rescue JSON::ParserError => e
+      Rails.logger.error "Failed to parse AI JSON response: #{e.message}"
+      Rails.logger.error "AI Response: #{ai_response}"
+      # Fallback to old format
+      updated_message = extractDraftResponse(ai_response)
+      suggested_time = 24.hours.from_now.iso8601
     end
     
-    # Create user message
+    # Create user message (not saved to DB)
     user_message = {
-      id: "user-#{Time.current.to_i}",
+      id: "followup-user-#{Time.current.to_i}",
       role: 'user',
       content: message,
       created_at: Time.current.iso8601
     }
     
-    # Create AI response with updated draft
+    # Create AI response with updated draft (not saved to DB)
     ai_message = {
-      id: "ai-#{Time.current.to_i}",
+      id: "followup-ai-#{Time.current.to_i}",
       role: 'assistant',
-      content: "I've updated the follow-up message:\n\n\"#{updated_message}\"\n\nWould you like to proceed with this message?",
+      content: "I've updated the follow-up message:\n\n\"#{updated_message}\"\n\nSuggested time: #{Time.parse(suggested_time).strftime('%B %d, %Y at %I:%M %p')}\n\nWould you like to proceed with this message?",
       created_at: Time.current.iso8601,
       followUpData: {
         type: 'draft_confirmation',
         draftMessage: updated_message,
+        suggestedTime: suggested_time,
         existingFollowupId: nil
       }
     }
@@ -496,17 +553,17 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
     # Parse the time instruction and calculate the new time
     new_time = parse_time_instruction(message, Time.current)
     
-    # Create user message
+    # Create user message (not saved to DB)
     user_message = {
-      id: "user-#{Time.current.to_i}",
+      id: "followup-user-#{Time.current.to_i}",
       role: 'user',
       content: message,
       created_at: Time.current.iso8601
     }
     
-    # Create AI response with updated time
+    # Create AI response with updated time (not saved to DB)
     ai_message = {
-      id: "ai-#{Time.current.to_i}",
+      id: "followup-ai-#{Time.current.to_i}",
       role: 'assistant',
       content: "Perfect! I've updated the timing to #{new_time.strftime('%B %d, %Y at %I:%M %p')}. Would you like to confirm this schedule?",
       created_at: Time.current.iso8601,
@@ -559,23 +616,23 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
     # Parse time instruction and calculate new time
     new_time = parse_time_instruction(message, current_time)
     
-    # Create user message
+    # Create user message (not saved to DB)
     user_message = {
-      id: "user-#{Time.current.to_i}",
+      id: "followup-user-#{Time.current.to_i}",
       role: 'user',
       content: message,
       created_at: Time.current.iso8601
     }
     
-    # Create AI response with updated time
+    # Create AI response with updated time (not saved to DB)
     ai_message = {
-      id: "ai-#{Time.current.to_i}",
+      id: "followup-ai-#{Time.current.to_i}",
       role: 'assistant',
       content: "Perfect! I've updated the timing to #{new_time.strftime('%B %d, %Y at %I:%M %p')}. Would you like to confirm this schedule?",
       created_at: Time.current.iso8601,
       followUpData: {
         type: 'time_confirmation',
-        draftMessage: current_message,
+        draftMessage: nil, # This will be set by the frontend
         scheduledTime: new_time.iso8601
       }
     }
@@ -584,23 +641,85 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
   end
 
   def handle_general_follow_up_instruction(message)
-    # Use AI to process general follow-up instructions
-    service = Ai::ChatService.new(@conversation, @user)
-    result = service.send_message(message)
+    # Get the conversation context for the AI
+    conversation_context = @conversation.messages.where.not(message_type: :activity).order(:created_at).last(5)
+    context_text = conversation_context.map { |msg| 
+      sender = msg.sender_type == 'Contact' ? msg.sender.name : 'Agent'
+      "[#{msg.created_at.strftime('%Y-%m-%d %H:%M')}] #{sender}: #{msg.content}"
+    }.join("\n")
     
-    # Format the messages for the frontend
+    # Create a focused prompt for general follow-up instructions
+    prompt = <<~PROMPT
+      You are helping an agent with follow-up message instructions for a customer conversation. 
+      
+      Conversation context:
+      #{context_text}
+      
+      The agent has given this instruction: "#{message}"
+      
+      Please respond with a JSON object containing the follow-up message and suggested time.
+      The JSON should have this structure:
+      {
+        "message": "The follow-up message text",
+        "time": "2025-10-01T10:00:00Z"
+      }
+      
+      The message should be customer-facing and professional.
+      The time should be in ISO 8601 format, defaulting to 24 hours from now if not specified.
+      
+      Return ONLY the JSON object, no other text.
+    PROMPT
+    
+    # Use OpenAI service directly without saving to conversation
+    ai_service = Ai::OpenaiService.new
+    
+    # Create properly formatted messages for the AI
+    messages = [
+      {
+        role: 'system',
+        content: prompt
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ]
+    
+    ai_response = ai_service.generate_chat_response(messages)
+    
+    # Parse the JSON response from AI
+    begin
+      followup_data = JSON.parse(ai_response.strip)
+      followup_message = followup_data['message']
+      suggested_time = followup_data['time'] || 24.hours.from_now.iso8601
+    rescue JSON::ParserError => e
+      Rails.logger.error "Failed to parse AI JSON response: #{e.message}"
+      Rails.logger.error "AI Response: #{ai_response}"
+      # Fallback to old format
+      followup_message = ai_response
+      suggested_time = 24.hours.from_now.iso8601
+    end
+    
+    # Create user message (not saved to DB)
     user_message = {
-      id: result[:user_message].id,
-      role: result[:user_message].role,
-      content: result[:user_message].content,
-      created_at: result[:user_message].created_at.iso8601
+      id: "followup-user-#{Time.current.to_i}",
+      role: 'user',
+      content: message,
+      created_at: Time.current.iso8601
     }
     
+    # Create AI response (not saved to DB)
     ai_message = {
-      id: result[:ai_message].id,
-      role: result[:ai_message].role,
-      content: result[:ai_message].content,
-      created_at: result[:ai_message].created_at.iso8601
+      id: "followup-ai-#{Time.current.to_i}",
+      role: 'assistant',
+      content: "Here's a follow-up message:\n\n\"#{followup_message}\"\n\nSuggested time: #{Time.parse(suggested_time).strftime('%B %d, %Y at %I:%M %p')}\n\nWould you like to proceed with this message?",
+      created_at: Time.current.iso8601,
+      followUpData: {
+        type: 'draft_confirmation',
+        draftMessage: followup_message,
+        suggestedTime: suggested_time,
+        existingFollowupId: nil
+      }
     }
     
     { success: true, user_message: user_message, ai_message: ai_message }

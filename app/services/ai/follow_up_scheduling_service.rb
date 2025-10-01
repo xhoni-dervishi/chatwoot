@@ -157,9 +157,8 @@ class Ai::FollowUpSchedulingService
       
       Please provide a follow-up suggestion in the following JSON format:
       {
-        "reasoning": "Brief explanation of why a follow-up is needed",
-        "draft_message": "The suggested follow-up message text",
-        "suggested_time_hours": 24
+        "message": "The suggested follow-up message text",
+        "time": "2025-10-01T10:00:00Z"
       }
       
       Guidelines:
@@ -174,13 +173,15 @@ class Ai::FollowUpSchedulingService
   def parse_followup_response(response)
     begin
       # Try to parse JSON response
-      parsed = JSON.parse(response)
+      parsed = JSON.parse(response.strip)
       {
-        reasoning: parsed['reasoning'] || 'Follow-up needed based on conversation analysis',
-        draft_message: parsed['draft_message'] || 'Hi, just checking in to see if you need any further assistance.',
-        suggested_time: (parsed['suggested_time_hours'] || 24).hours.from_now
+        reasoning: 'Follow-up needed based on conversation analysis',
+        draft_message: parsed['message'] || 'Hi, just checking in to see if you need any further assistance.',
+        suggested_time: parsed['time'] ? Time.parse(parsed['time']) : 24.hours.from_now
       }
-    rescue JSON::ParserError
+    rescue JSON::ParserError, ArgumentError => e
+      Rails.logger.error "Failed to parse follow-up response: #{e.message}"
+      Rails.logger.error "Response: #{response}"
       # Fallback if AI doesn't return proper JSON
       {
         reasoning: 'Follow-up needed based on conversation analysis',

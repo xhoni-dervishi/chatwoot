@@ -110,7 +110,7 @@ export function useFollowUpScheduling(conversationId) {
 
         try {
             // Use the AI chat API to generate an updated draft
-            const response = await AiChatAPI.sendMessage(conversationId, `Please update this follow-up message: "${currentDraft}" based on this request: "${userRequest}". Return only the updated message.`);
+            const response = await AiChatAPI.sendFollowUpMessage(conversationId, `Please update this follow-up message: "${currentDraft}" based on this request: "${userRequest}". Return only the updated message.`);
 
             if (response.data.success) {
                 return response.data.ai_message.content;
