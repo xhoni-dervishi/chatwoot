@@ -485,11 +485,12 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
       The JSON should have this structure:
       {
         "message": "The updated follow-up message text",
-        "time": "2025-10-01T10:00:00Z"
+        "time": "ISO 8601 timestamp for when to send the follow-up"
       }
       
       The message should be customer-facing and professional.
-      The time should be in ISO 8601 format, defaulting to 24 hours from now if not specified.
+      The time should be in ISO 8601 format and MUST be in the FUTURE (at least 1 hour from now, default 24 hours).
+      Current time is approximately: #{Time.current.iso8601}
       
       Return ONLY the JSON object, no other text.
     PROMPT
@@ -515,8 +516,16 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
     begin
       followup_data = JSON.parse(ai_response.strip)
       updated_message = followup_data['message']
-      suggested_time = followup_data['time'] || 24.hours.from_now.iso8601
-    rescue JSON::ParserError => e
+      
+      # Parse and validate the suggested time
+      if followup_data['time']
+        parsed_time = Time.parse(followup_data['time'])
+        # If the suggested time is in the past, use 24 hours from now instead
+        suggested_time = parsed_time > Time.current ? parsed_time.iso8601 : 24.hours.from_now.iso8601
+      else
+        suggested_time = 24.hours.from_now.iso8601
+      end
+    rescue JSON::ParserError, ArgumentError => e
       Rails.logger.error "Failed to parse AI JSON response: #{e.message}"
       Rails.logger.error "AI Response: #{ai_response}"
       # Fallback to old format
@@ -661,11 +670,12 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
       The JSON should have this structure:
       {
         "message": "The follow-up message text",
-        "time": "2025-10-01T10:00:00Z"
+        "time": "ISO 8601 timestamp for when to send the follow-up"
       }
       
       The message should be customer-facing and professional.
-      The time should be in ISO 8601 format, defaulting to 24 hours from now if not specified.
+      The time should be in ISO 8601 format and MUST be in the FUTURE (at least 1 hour from now, default 24 hours).
+      Current time is approximately: #{Time.current.iso8601}
       
       Return ONLY the JSON object, no other text.
     PROMPT
@@ -691,8 +701,16 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
     begin
       followup_data = JSON.parse(ai_response.strip)
       followup_message = followup_data['message']
-      suggested_time = followup_data['time'] || 24.hours.from_now.iso8601
-    rescue JSON::ParserError => e
+      
+      # Parse and validate the suggested time
+      if followup_data['time']
+        parsed_time = Time.parse(followup_data['time'])
+        # If the suggested time is in the past, use 24 hours from now instead
+        suggested_time = parsed_time > Time.current ? parsed_time.iso8601 : 24.hours.from_now.iso8601
+      else
+        suggested_time = 24.hours.from_now.iso8601
+      end
+    rescue JSON::ParserError, ArgumentError => e
       Rails.logger.error "Failed to parse AI JSON response: #{e.message}"
       Rails.logger.error "AI Response: #{ai_response}"
       # Fallback to old format

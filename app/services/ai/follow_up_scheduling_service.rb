@@ -158,15 +158,17 @@ class Ai::FollowUpSchedulingService
       Please provide a follow-up suggestion in the following JSON format:
       {
         "message": "The suggested follow-up message text",
-        "time": "2025-10-01T10:00:00Z"
+        "time": "ISO 8601 timestamp for when to send the follow-up"
       }
       
       Guidelines:
       - The message should be polite and professional
       - Include the customer's name: #{customer_name}
       - Keep it concise but friendly
-      - Suggest 24 hours as default unless there's urgency
+      - The time should be in the FUTURE (at least 1 hour from now, default 24 hours unless urgent)
+      - Use ISO 8601 format (e.g., "2025-10-02T14:30:00Z")
       - Make it contextually relevant to the conversation
+      - Current time is approximately: #{Time.current.iso8601}
     PROMPT
   end
 
@@ -174,10 +176,20 @@ class Ai::FollowUpSchedulingService
     begin
       # Try to parse JSON response
       parsed = JSON.parse(response.strip)
+      
+      # Parse the suggested time and validate it's in the future
+      suggested_time = if parsed['time']
+        parsed_time = Time.parse(parsed['time'])
+        # If the suggested time is in the past, use 24 hours from now instead
+        parsed_time > Time.current ? parsed_time : 24.hours.from_now
+      else
+        24.hours.from_now
+      end
+      
       {
         reasoning: 'Follow-up needed based on conversation analysis',
         draft_message: parsed['message'] || 'Hi, just checking in to see if you need any further assistance.',
-        suggested_time: parsed['time'] ? Time.parse(parsed['time']) : 24.hours.from_now
+        suggested_time: suggested_time
       }
     rescue JSON::ParserError, ArgumentError => e
       Rails.logger.error "Failed to parse follow-up response: #{e.message}"
