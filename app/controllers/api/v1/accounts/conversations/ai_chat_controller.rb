@@ -578,7 +578,8 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
       created_at: Time.current.iso8601,
       followUpData: {
         type: 'time_confirmation',
-        draftMessage: nil, # This will be set by the frontend
+        currentMessage: nil, # This will be set by the frontend from the previous message
+        currentTime: new_time.iso8601,
         scheduledTime: new_time.iso8601
       }
     }

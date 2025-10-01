@@ -261,8 +261,19 @@ const confirmTimeSelection = async (messageId) => {
       content += `\nWould you like to replace the existing follow-up${followups.length > 1 ? 's' : ''} with this new one?`;
 
       // Get the message content from the appropriate field based on message type
-      const messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
+      let messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
       const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
+
+      // If we still don't have message content (for time_confirmation type), get it from previous message
+      if (!messageContent && message.followUpData.type === 'time_confirmation') {
+        const previousMessage = chatMessages.value.find(m => 
+          m.followUpData?.type === 'time_editing' && 
+          chatMessages.value.indexOf(m) < chatMessages.value.indexOf(message)
+        );
+        if (previousMessage) {
+          messageContent = previousMessage.followUpData.currentMessage;
+        }
+      }
 
       console.log('Creating newFollowup object with:', {
         message: messageContent,
@@ -288,8 +299,19 @@ const confirmTimeSelection = async (messageId) => {
       });
     } else {
       // No existing follow-ups, create the new follow-up
-      const messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
+      let messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
       const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
+
+      // If we still don't have message content (for time_confirmation type), get it from previous message
+      if (!messageContent && message.followUpData.type === 'time_confirmation') {
+        const previousMessage = chatMessages.value.find(m => 
+          m.followUpData?.type === 'time_editing' && 
+          chatMessages.value.indexOf(m) < chatMessages.value.indexOf(message)
+        );
+        if (previousMessage) {
+          messageContent = previousMessage.followUpData.currentMessage;
+        }
+      }
 
       console.log('Creating follow-up with data:', {
         conversationId: props.conversationId,
@@ -310,7 +332,7 @@ const confirmTimeSelection = async (messageId) => {
         chatMessages.value.push({
           id: `followup-confirmed-${Date.now()}`,
           role: 'assistant',
-          content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${new Date(message.followUpData.currentTime).toLocaleString()}.`,
+          content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${new Date(scheduledTime).toLocaleString()}.`,
           created_at: new Date().toISOString(),
         });
 
@@ -331,7 +353,7 @@ const confirmTimeSelection = async (messageId) => {
     chatMessages.value.push({
       id: `followup-confirmed-${Date.now()}`,
       role: 'assistant',
-      content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${new Date(message.followUpData.scheduledTime).toLocaleString()}.`,
+      content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${new Date(message.followUpData.currentTime || message.followUpData.scheduledTime).toLocaleString()}.`,
       created_at: new Date().toISOString(),
     });
 
