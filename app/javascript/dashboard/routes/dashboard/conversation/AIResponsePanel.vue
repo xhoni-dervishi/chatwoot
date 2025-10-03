@@ -8,6 +8,7 @@ import { emitter } from 'shared/helpers/mitt';
 import { BUS_EVENTS } from 'shared/constants/busEvents';
 import { useStore } from 'vuex';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
+import { formatDateForChat } from 'dashboard/utils/timezoneUtils';
 // Remove FollowUpScheduler import - we'll integrate it into the chat flow
 
 const props = defineProps({
@@ -67,7 +68,7 @@ const startFollowUpFlow = async () => {
       chatMessages.value.push({
         id: `followup-existing-${Date.now()}`,
         role: 'assistant',
-        content: `You already have a pending follow-up:\n\n"${existingFollowup.message_content}"\n\nScheduled for: ${new Date(existingFollowup.scheduled_at).toLocaleString()}\n\nWould you like to change it?`,
+        content: `You already have a pending follow-up:\n\n"${existingFollowup.message_content}"\n\nScheduled for: ${formatDateForChat(existingFollowup.scheduled_at)}\n\nWould you like to change it?`,
         created_at: new Date().toISOString(),
         followUpData: {
           type: 'existing_followup_change',
@@ -153,7 +154,7 @@ const confirmDraftMessage = async (messageId) => {
         chatMessages.value.push({
           id: `followup-time-${Date.now()}`,
           role: 'assistant',
-          content: `Great! I've updated the follow-up message. It's scheduled for ${new Date(response.data.scheduled_followup.scheduled_at).toLocaleString()}. Would you like to change the timing?`,
+          content: `Great! I've updated the follow-up message. It's scheduled for ${formatDateForChat(response.data.scheduled_followup.scheduled_at)}. Would you like to change the timing?`,
           created_at: new Date().toISOString(),
           followUpData: {
             type: 'time_confirmation',
@@ -187,7 +188,7 @@ const confirmDraftMessage = async (messageId) => {
       chatMessages.value.push({
         id: `followup-time-${Date.now()}`,
         role: 'assistant',
-        content: `Great! Now let's set the timing. When would you like to send this follow-up?\n\nI suggest ${new Date(message.followUpData.suggestedTime).toLocaleString()}, but you can tell me a different time like "10 minutes from now" or "tomorrow morning".`,
+        content: `Great! Now let's set the timing. When would you like to send this follow-up?\n\nI suggest ${formatDateForChat(message.followUpData.suggestedTime)}, but you can tell me a different time like "10 minutes from now" or "tomorrow morning".`,
         created_at: new Date().toISOString(),
         followUpData: {
           type: 'time_editing',
@@ -255,7 +256,7 @@ const confirmTimeSelection = async (messageId) => {
       let content = `I found ${followups.length} existing follow-up${followups.length > 1 ? 's' : ''}:\n\n`;
       
       followups.forEach((followup, index) => {
-        content += `${index + 1}. "${followup.message_content}" - Scheduled for ${new Date(followup.scheduled_at).toLocaleString()}\n`;
+        content += `${index + 1}. "${followup.message_content}" - Scheduled for ${formatDateForChat(followup.scheduled_at)}\n`;
       });
       
       content += `\nWould you like to replace the existing follow-up${followups.length > 1 ? 's' : ''} with this new one?`;
@@ -332,7 +333,7 @@ const confirmTimeSelection = async (messageId) => {
         chatMessages.value.push({
           id: `followup-confirmed-${Date.now()}`,
           role: 'assistant',
-          content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${new Date(scheduledTime).toLocaleString()}.`,
+          content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${formatDateForChat(scheduledTime)}.`,
           created_at: new Date().toISOString(),
         });
 
@@ -353,7 +354,7 @@ const confirmTimeSelection = async (messageId) => {
     chatMessages.value.push({
       id: `followup-confirmed-${Date.now()}`,
       role: 'assistant',
-      content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${new Date(message.followUpData.currentTime || message.followUpData.scheduledTime).toLocaleString()}.`,
+      content: `✅ Perfect! Your follow-up has been scheduled successfully. I'll send the message at ${formatDateForChat(message.followUpData.currentTime || message.followUpData.scheduledTime)}.`,
       created_at: new Date().toISOString(),
     });
 
@@ -450,7 +451,7 @@ const replaceExistingFollowups = async (messageId) => {
       chatMessages.value.push({
         id: `followup-confirmed-${Date.now()}`,
         role: 'assistant',
-        content: `✅ Perfect! I've replaced the existing follow-up${existingFollowups.length > 1 ? 's' : ''} with your new one. Your follow-up has been scheduled successfully for ${new Date(message.followUpData.newFollowup.scheduledTime).toLocaleString()}.`,
+        content: `✅ Perfect! I've replaced the existing follow-up${existingFollowups.length > 1 ? 's' : ''} with your new one. Your follow-up has been scheduled successfully for ${formatDateForChat(message.followUpData.newFollowup.scheduledTime)}.`,
         created_at: new Date().toISOString(),
       });
 
@@ -760,12 +761,14 @@ const handleKeyPress = (event) => {
 const extractDraftResponse = (response) => {
   if (!response) return '';
   
-  const draftReplyMatch = response.match(/\[DRAFT REPLY\]\s*([\s\S]*?)(?=\n###|\[|$)/i);
+  // Check for [Draft Reply] flag in the first section until end of string or ###
+  const draftReplyMatch = response.match(/\[Draft Reply\]\s*([\s\S]*?)(?=\n###|$)/i);
   if (draftReplyMatch && draftReplyMatch[1]) {
     return draftReplyMatch[1]?.trim() || '';
   }
   
-  const draftResponseMatch = response.match(/###\s*Draft Response\s*\n([\s\S]*?)(?=\n###|$)/i);
+  // Check from ### until other ### or end of string
+  const draftResponseMatch = response.match(/###\s*([\s\S]*?)(?=\n###|$)/i);
   
   if (draftResponseMatch && draftResponseMatch[1]) {
     return draftResponseMatch[1]?.trim() || '';

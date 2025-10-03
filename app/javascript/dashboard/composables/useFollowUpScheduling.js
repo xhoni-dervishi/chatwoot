@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import AiChatAPI from '../api/aiChat';
+import { formatDateForUI } from '../utils/timezoneUtils';
 
 export function useFollowUpScheduling(conversationId) {
     const isAnalyzing = ref(false);
@@ -174,17 +175,9 @@ export function useFollowUpScheduling(conversationId) {
         error.value = '';
     };
 
-    // Format time for display
+    // Format time for display in user's timezone
     const formatScheduledTime = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
+        return formatDateForUI(dateString);
     };
 
     // Calculate suggested time options

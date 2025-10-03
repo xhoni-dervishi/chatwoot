@@ -416,14 +416,14 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
   def extractDraftResponse(response)
     return '' if response.blank?
     
-    # Check for [DRAFT REPLY] prefix first - stop at ### or [ characters
-    draft_reply_match = response.match(/\[DRAFT REPLY\]\s*([\s\S]*?)(?=\n###|\[|$)/i)
+    # Check for [Draft Reply] flag in the first section until end of string or ###
+    draft_reply_match = response.match(/\[Draft Reply\]\s*([\s\S]*?)(?=\n###|$)/i)
     if draft_reply_match && draft_reply_match[1]
       return draft_reply_match[1]&.strip || ''
     end
     
-    # Fallback to old format
-    draft_response_match = response.match(/###\s*Draft Response\s*\n([\s\S]*?)(?=\n###|$)/i)
+    # Check from ### until other ### or end of string
+    draft_response_match = response.match(/###\s*([\s\S]*?)(?=\n###|$)/i)
     
     if draft_response_match && draft_response_match[1]
       return draft_response_match[1]&.strip || ''

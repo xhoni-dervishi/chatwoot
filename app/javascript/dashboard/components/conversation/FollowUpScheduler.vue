@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useFollowUpScheduling } from '../../composables/useFollowUpScheduling';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
+import { formatDateForUI } from 'dashboard/utils/timezoneUtils';
 
 export default {
   name: 'FollowUpScheduler',
@@ -271,7 +272,7 @@ export default {
                 class="text-n-brand focus:ring-n-brand"
               />
               <label :for="`time-${option.label}`" class="text-sm text-n-slate-12">
-                {{ option.label }} ({{ formatScheduledTime(option.value.toISOString()) }})
+                {{ option.label }} ({{ formatDateForUI(option.value.toISOString()) }})
               </label>
             </div>
           </div>
