@@ -8,8 +8,14 @@ class AiChatAPI extends ApiClient {
 
     // Send a message to AI chat
     sendMessage(conversationId, message) {
+        // Get user's timezone information
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const timezoneOffset = new Date().getTimezoneOffset() / -60; // Convert to hours, positive for ahead of UTC
+
         return axios.post(`${this.url}/${conversationId}/ai_chat_send_message`, {
             message,
+            timezone: timezone,
+            timezone_offset: timezoneOffset
         });
     }
 
@@ -58,9 +64,15 @@ class AiChatAPI extends ApiClient {
     }
 
     sendFollowUpMessage(conversationId, message) {
+        // Get user's timezone information
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const timezoneOffset = new Date().getTimezoneOffset() / -60; // Convert to hours, positive for ahead of UTC
+
         return axios.post(`${this.url}/${conversationId}/ai_chat_send_message`, {
             message,
-            follow_up_mode: true
+            follow_up_mode: true,
+            timezone: timezone,
+            timezone_offset: timezoneOffset
         });
     }
 }

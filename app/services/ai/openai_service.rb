@@ -342,6 +342,10 @@ class Ai::OpenaiService
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     
+    # Set timeouts to prevent hanging requests
+    http.read_timeout = 120  # 2 minutes
+    http.open_timeout = 30   # 30 seconds
+    
     request = Net::HTTP::Post.new(uri)
     request['Content-Type'] = 'application/json'
     request['Authorization'] = "Bearer #{@api_key}"

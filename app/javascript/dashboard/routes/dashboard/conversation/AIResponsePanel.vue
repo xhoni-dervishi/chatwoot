@@ -247,11 +247,9 @@ const confirmTimeSelection = async (messageId) => {
   startLoadingAnimation();
 
   try {
-    // Check for existing follow-ups before final confirmation
     const existingResponse = await AiChatAPI.getExistingFollowups(props.conversationId);
     
     if (existingResponse.data.success && existingResponse.data.followups.length > 0) {
-      // Show existing follow-ups with delete/replace options
       const followups = existingResponse.data.followups;
       let content = `I found ${followups.length} existing follow-up${followups.length > 1 ? 's' : ''}:\n\n`;
       
@@ -261,11 +259,9 @@ const confirmTimeSelection = async (messageId) => {
       
       content += `\nWould you like to replace the existing follow-up${followups.length > 1 ? 's' : ''} with this new one?`;
 
-      // Get the message content from the appropriate field based on message type
       let messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
       const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
 
-      // If we still don't have message content (for time_confirmation type), get it from previous message
       if (!messageContent && message.followUpData.type === 'time_confirmation') {
         const previousMessage = chatMessages.value.find(m => 
           m.followUpData?.type === 'time_editing' && 
@@ -299,11 +295,9 @@ const confirmTimeSelection = async (messageId) => {
         }
       });
     } else {
-      // No existing follow-ups, create the new follow-up
       let messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
       const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
 
-      // If we still don't have message content (for time_confirmation type), get it from previous message
       if (!messageContent && message.followUpData.type === 'time_confirmation') {
         const previousMessage = chatMessages.value.find(m => 
           m.followUpData?.type === 'time_editing' && 
@@ -374,7 +368,6 @@ const editDraftMessage = async (messageId, editRequest) => {
   startLoadingAnimation();
 
   try {
-    // Use AI to update the draft
     const aiResponse = await AiChatAPI.sendMessage(
       props.conversationId,
       `Please update this follow-up message: "${message.followUpData.draftMessage}" based on this request: "${editRequest}". Return only the updated message.`
@@ -383,7 +376,6 @@ const editDraftMessage = async (messageId, editRequest) => {
     if (aiResponse.data.success) {
       const updatedMessage = aiResponse.data.ai_message.content;
       
-      // Update the message with new draft
       message.followUpData.draftMessage = updatedMessage;
       message.content = `I've updated the follow-up message:\n\n"${updatedMessage}"\n\nWould you like to proceed with this message?`;
     } else {
@@ -721,6 +713,9 @@ const sendDraft = async (messageContent) => {
       private: false, 
     });
     
+    // Close the AI response panel after sending
+    closeAIResponsePanel();
+    
   } catch (err) {
     console.error('Failed to send message:', err);
     error.value = 'Failed to send message. Please try again.';
@@ -741,7 +736,14 @@ const copyToClipboard = async (messageContent) => {
 const insertIntoEditor = (messageContent) => {
   const content = messageContent || draftResponse.value;
   if (!content || !content.toString().trim()) return;
-  emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, content);
+  
+  try {
+    emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, content);
+    // Close the AI response panel after inserting
+    closeAIResponsePanel();
+  } catch (err) {
+    console.error('Failed to insert into editor:', err);
+  }
 };
 
 const scrollToBottom = async () => {
@@ -761,10 +763,16 @@ const handleKeyPress = (event) => {
 const extractDraftResponse = (response) => {
   if (!response) return '';
   
-  // Check for [Draft Reply] flag in the first section until end of string or ###
-  const draftReplyMatch = response.match(/\[Draft Reply\]\s*([\s\S]*?)(?=\n###|$)/i);
+  // Check for [DRAFT REPLY] flag (case insensitive) in the first section until end of string or ###
+  const draftReplyMatch = response.match(/\[DRAFT REPLY\]\s*([\s\S]*?)(?=\n###|$)/i);
   if (draftReplyMatch && draftReplyMatch[1]) {
     return draftReplyMatch[1]?.trim() || '';
+  }
+  
+  // Check for [Draft Reply] flag (case insensitive) in the first section until end of string or ###
+  const draftReplyMatchAlt = response.match(/\[Draft Reply\]\s*([\s\S]*?)(?=\n###|$)/i);
+  if (draftReplyMatchAlt && draftReplyMatchAlt[1]) {
+    return draftReplyMatchAlt[1]?.trim() || '';
   }
   
   // Check from ### until other ### or end of string
@@ -851,7 +859,12 @@ onMounted(() => {
             <Icon icon="i-lucide-sparkles" class="w-4 h-4 text-white" />
           </div>
           <div class="bg-n-slate-4 rounded-lg p-3 max-w-[calc(100%-44px)]">
-            <p class="text-sm text-n-slate-12 whitespace-pre-wrap">{{ message.content }}</p>
+            <p class="text-sm text-n-slate-12 whitespace-pre-wrap">
+              {{ message.content }}
+              <span v-if="message.followUpData?.type === 'time_confirmation' && message.followUpData?.scheduledTime">
+                <br><br>📅 Scheduled for: {{ formatDateForChat(message.followUpData.scheduledTime) }}
+              </span>
+            </p>
             
             <!-- Follow-up Action Buttons -->
             <div v-if="message.followUpData" class="flex gap-2 mt-2 border-t border-n-weak pt-2">
@@ -859,21 +872,33 @@ onMounted(() => {
               <template v-if="message.followUpData.type === 'draft_confirmation'">
                 <button
                   @click="confirmDraftMessage(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-brand text-white hover:brightness-110' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-check" class="w-3 h-3" />
                   Confirm Message
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Make it more polite')"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-edit" class="w-3 h-3" />
                   More Polite
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Make it shorter')"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-edit" class="w-3 h-3" />
                   Shorter
@@ -884,7 +909,11 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'draft_editing'">
                 <button
                   @click="proceedToTimeSelection(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-brand text-white hover:brightness-110' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-clock" class="w-3 h-3" />
                   Set Time
@@ -895,21 +924,33 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'time_confirmation'">
                 <button
                   @click="confirmTimeSelection(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-brand text-white hover:brightness-110' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-check" class="w-3 h-3" />
                   Confirm Time
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Schedule for 1 hour later')"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-clock" class="w-3 h-3" />
                   1 Hour Later
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Schedule for 24 hours later')"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-clock" class="w-3 h-3" />
                   24 Hours Later
@@ -920,7 +961,11 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'time_editing'">
                 <button
                   @click="confirmTimeSelection(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-brand text-white hover:brightness-110' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-check" class="w-3 h-3" />
                   Confirm Time
@@ -931,21 +976,33 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'existing_followup_change'">
                 <button
                   @click="changeExistingFollowup(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-brand text-white hover:brightness-110' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-edit" class="w-3 h-3" />
                   Yes, Change It
                 </button>
                 <button
                   @click="keepExistingFollowup(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-x" class="w-3 h-3" />
                   Keep Current
                 </button>
                 <button
                   @click="cancelExistingFollowup(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-red-500 text-white hover:bg-red-600 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-red-500 text-white hover:bg-red-600' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-trash-2" class="w-3 h-3" />
                   Cancel Follow-up
@@ -956,14 +1013,22 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'existing_followups_confirmation'">
                 <button
                   @click="replaceExistingFollowups(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-brand text-white hover:brightness-110' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-refresh-cw" class="w-3 h-3" />
                   Replace Existing
                 </button>
                 <button
                   @click="keepExistingFollowups(message.id)"
-                  class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
+                  :disabled="!isInFollowUpMode"
+                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
+                  :class="isInFollowUpMode 
+                    ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
+                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
                   <Icon icon="i-lucide-x" class="w-3 h-3" />
                   Keep Existing
@@ -974,14 +1039,14 @@ onMounted(() => {
             <!-- Regular Action Buttons -->
             <div v-else class="flex gap-2 mt-2 border-t border-n-weak pt-2">
               <button
-                @click="copyToClipboard(message.content.includes('[DRAFT REPLY]') || message.content.includes('Draft Response') ? extractDraftResponse(message.content) : message.content)"
+                @click="copyToClipboard(message.content.includes('[DRAFT REPLY]') || message.content.includes('[Draft Reply]') || message.content.includes('Draft Response') ? extractDraftResponse(message.content) : message.content)"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
                 <Icon icon="i-lucide-copy" class="w-3 h-3" />
                 Copy
               </button>
               <button
-                v-if="message.content.includes('[DRAFT REPLY]') || message.content.includes('Draft Response')"
+                v-if="message.content.includes('[DRAFT REPLY]') || message.content.includes('[Draft Reply]') || message.content.includes('Draft Response')"
                 @click="insertIntoEditor(extractDraftResponse(message.content))"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-slate-9/10 hover:bg-n-slate-9/20 rounded"
               >
@@ -989,7 +1054,7 @@ onMounted(() => {
                 Insert
               </button>
               <button
-                v-if="message.content.includes('[DRAFT REPLY]') || message.content.includes('Draft Response')"
+                v-if="message.content.includes('[DRAFT REPLY]') || message.content.includes('[Draft Reply]') || message.content.includes('Draft Response')"
                 @click="sendDraft(extractDraftResponse(message.content))"
                 class="flex items-center gap-1 px-2 py-1 text-xs bg-n-brand text-white hover:brightness-110 rounded"
               >
