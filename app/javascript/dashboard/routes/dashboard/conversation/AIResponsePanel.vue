@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue';
+import { useWindowSize } from '@vueuse/core';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import SidebarActionsHeader from 'dashboard/components-next/SidebarActionsHeader.vue';
 import AIApi from 'dashboard/api/ai';
@@ -20,6 +21,7 @@ const props = defineProps({
 
 const { updateUISettings } = useUISettings();
 const store = useStore();
+const { width } = useWindowSize();
 
 const isGenerating = ref(false);
 const aiResponse = ref('');
@@ -713,8 +715,9 @@ const sendDraft = async (messageContent) => {
       private: false, 
     });
     
-    // Close the AI response panel after sending
-    closeAIResponsePanel();
+    if (isMobile) {
+      closeAIResponsePanel();
+    }
     
   } catch (err) {
     console.error('Failed to send message:', err);
@@ -739,8 +742,9 @@ const insertIntoEditor = (messageContent) => {
   
   try {
     emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, content);
-    // Close the AI response panel after inserting
-    closeAIResponsePanel();
+    if (isMobile) {
+      closeAIResponsePanel();
+    }
   } catch (err) {
     console.error('Failed to insert into editor:', err);
   }
@@ -785,6 +789,7 @@ const extractDraftResponse = (response) => {
   return response;
 };
 
+const isMobile = computed(() => width.value < 768);
 const draftResponse = computed(() => extractDraftResponse(aiResponse.value));
 const hasResponse = computed(() => aiResponse.value && aiResponse.value.length > 0);
 const hasChatMessages = computed(() => chatMessages.value.length > 0);
