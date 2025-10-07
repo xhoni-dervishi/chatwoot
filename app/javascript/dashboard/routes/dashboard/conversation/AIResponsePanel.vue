@@ -60,7 +60,6 @@ const startFollowUpFlow = async () => {
   startLoadingAnimation();
 
   try {
-    // First check for existing pending follow-ups
     const existingResponse = await AiChatAPI.getExistingFollowups(props.conversationId);
     
     if (existingResponse.data.success && existingResponse.data.followups.length > 0) {
@@ -658,10 +657,69 @@ const sendMessage = async () => {
       // Remove the temporary user message and add the real ones
       chatMessages.value.pop();
       chatMessages.value.push(response.data.user_message);
-      chatMessages.value.push({
-        ...response.data.ai_message,
-        followUpData: response.data.ai_message.followUpData || null
-      });
+      
+      // Handle follow-up mode responses differently
+      if (isInFollowUpMode.value && response.data.ai_message.followUpData) {
+        // This is a follow-up scheduling response, handle it appropriately
+        const followUpData = response.data.ai_message.followUpData;
+        
+        if (followUpData.type === 'time_update') {
+          // Handle time update response
+          chatMessages.value.push({
+            id: `followup-time-update-${Date.now()}`,
+            role: 'assistant',
+            content: `Perfect! I've updated the timing to ${formatDateForChat(followUpData.suggested_time)}. Would you like to confirm this schedule?`,
+            created_at: new Date().toISOString(),
+            followUpData: {
+              type: 'time_confirmation',
+              currentMessage: followUpData.currentMessage,
+              scheduledTime: followUpData.suggested_time,
+              followUpId: followUpData.followUpId
+            }
+          });
+        } else if (followUpData.type === 'message_update') {
+          // Handle message update response
+          chatMessages.value.push({
+            id: `followup-message-update-${Date.now()}`,
+            role: 'assistant',
+            content: `I've updated the follow-up message:\n\n"${followUpData.message}"\n\nWould you like to proceed with this message?`,
+            created_at: new Date().toISOString(),
+            followUpData: {
+              type: 'draft_confirmation',
+              draftMessage: followUpData.message,
+              suggestedTime: followUpData.suggested_time,
+              reasoning: followUpData.reasoning
+            }
+          });
+        } else if (followUpData.type === 'new_followup') {
+          // Handle new follow-up response
+          chatMessages.value.push({
+            id: `followup-new-${Date.now()}`,
+            role: 'assistant',
+            content: `Here's a follow-up message:\n\n"${followUpData.message}"\n\nSuggested time: ${formatDateForChat(followUpData.suggested_time)}\n\nWould you like to proceed with this message?`,
+            created_at: new Date().toISOString(),
+            followUpData: {
+              type: 'draft_confirmation',
+              draftMessage: followUpData.message,
+              suggestedTime: followUpData.suggested_time,
+              reasoning: followUpData.reasoning
+            }
+          });
+        } else {
+          // Fallback to regular message display
+          chatMessages.value.push({
+            ...response.data.ai_message,
+            followUpData: response.data.ai_message.followUpData || null
+          });
+        }
+      } else {
+        // Regular chat message
+        chatMessages.value.push({
+          ...response.data.ai_message,
+          followUpData: response.data.ai_message.followUpData || null
+        });
+      }
+      
       await scrollToBottom();
     } else {
       error.value = response.data.error || 'Failed to send message';
@@ -715,7 +773,7 @@ const sendDraft = async (messageContent) => {
       private: false, 
     });
     
-    if (isMobile) {
+    if (isMobile.value) {
       closeAIResponsePanel();
     }
     
@@ -742,7 +800,7 @@ const insertIntoEditor = (messageContent) => {
   
   try {
     emitter.emit(BUS_EVENTS.INSERT_INTO_NORMAL_EDITOR, content);
-    if (isMobile) {
+    if (isMobile.value) {
       closeAIResponsePanel();
     }
   } catch (err) {
