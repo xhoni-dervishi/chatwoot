@@ -7,7 +7,6 @@ import Button from 'next/button/Button.vue';
 import Icon from 'next/icon/Icon.vue';
 import { useSnakeCase } from 'dashboard/composables/useTransformKeys';
 import { useMessageContext } from '../provider.js';
-import { downloadFile } from '@chatwoot/utils';
 
 import GalleryView from 'dashboard/components/widgets/conversation/components/GalleryView.vue';
 
@@ -31,10 +30,23 @@ const handleError = () => {
 
 const downloadAttachment = async () => {
   const { fileType, dataUrl, extension } = attachment.value;
+  
   try {
     isDownloading.value = true;
-    await downloadFile({ url: dataUrl, type: fileType, extension });
+    
+    // Create a temporary link element for direct download
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `image.${extension || 'jpg'}`;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener nofollow';
+    
+    // Append to body, click, and remove
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   } catch (error) {
+    console.error('Download error:', error);
     useAlert(t('GALLERY_VIEW.ERROR_DOWNLOADING'));
   } finally {
     isDownloading.value = false;

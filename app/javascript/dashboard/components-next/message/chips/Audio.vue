@@ -8,7 +8,6 @@ import {
 } from 'vue';
 import Icon from 'next/icon/Icon.vue';
 import { timeStampAppendedURL } from 'dashboard/helper/URLHelper';
-import { downloadFile } from '@chatwoot/utils';
 import { useEmitter } from 'dashboard/composables/emitter';
 import { emitter } from 'shared/helpers/mitt';
 
@@ -116,7 +115,18 @@ const changePlaybackSpeed = () => {
 
 const downloadAudio = async () => {
   const { fileType, dataUrl, extension } = attachment;
-  downloadFile({ url: dataUrl, type: fileType, extension });
+  
+  // Create a temporary link element for direct download
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `audio.${extension || 'mp3'}`;
+  link.target = '_blank';
+  link.rel = 'noreferrer noopener nofollow';
+  
+  // Append to body, click, and remove
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 </script>
 
