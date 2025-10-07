@@ -670,19 +670,7 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
       # Clean up the AI response to handle common JSON formatting issues
       cleaned_response = ai_response.strip
       
-      # Remove any extra quotes around the entire response
-      cleaned_response = cleaned_response.gsub(/^["']|["']$/, '')
-      
-      # Handle case where AI returns JSON as a string (wrapped in quotes)
-      if cleaned_response.start_with?('"') && cleaned_response.end_with?('"')
-        cleaned_response = cleaned_response[1..-2] # Remove outer quotes
-      end
-      
-      # Fix common JSON issues
-      cleaned_response = cleaned_response.gsub(/""([^"]+)":/, '"\1":') # Fix double quotes around keys
-      cleaned_response = cleaned_response.gsub(/,(\s*[}\]])/, '\1') # Remove trailing commas
-      
-      # Try to extract JSON from markdown code blocks if present
+      # First, try to extract JSON from markdown code blocks if present
       if cleaned_response.include?('```')
         json_match = cleaned_response.match(/```(?:json)?\s*(\{.*?\})\s*```/m)
         cleaned_response = json_match[1] if json_match
@@ -694,24 +682,17 @@ class Api::V1::Accounts::Conversations::AiChatController < Api::V1::Accounts::Co
         cleaned_response = json_match[0] if json_match
       end
       
-      # Additional cleanup for the specific case we're seeing
-      # Remove any leading/trailing quotes that might still be there
+      # Remove any outer quotes around the entire JSON response
       cleaned_response = cleaned_response.strip
       if cleaned_response.start_with?('"') && cleaned_response.end_with?('"')
         cleaned_response = cleaned_response[1..-2]
       end
       
+      # Only fix obvious JSON issues without corrupting the content
+      cleaned_response = cleaned_response.gsub(/,(\s*[}\]])/, '\1') # Remove trailing commas
+      
       # Remove control characters that might cause JSON parsing issues
       cleaned_response = cleaned_response.gsub(/[\x00-\x1F\x7F]/, '')
-      
-      # If we still have quotes around the JSON, try to extract it
-      if cleaned_response.include?('"type":')
-        json_start = cleaned_response.index('{')
-        json_end = cleaned_response.rindex('}') + 1
-        if json_start && json_end
-          cleaned_response = cleaned_response[json_start...json_end]
-        end
-      end
       
       Rails.logger.info "Final cleaned response: #{cleaned_response}"
       
