@@ -32,6 +32,7 @@ const chatContainer = ref(null);
 const loadingDots = ref(0);
 const isInFollowUpMode = ref(false);
 const currentFollowUp = ref(null);
+const activeFollowUpMessageId = ref(null);
 
 const closeAIResponsePanel = () => {
   updateUISettings({
@@ -44,6 +45,7 @@ const startFollowUpFlow = async () => {
     // Cancel follow-up mode
     isInFollowUpMode.value = false;
     currentFollowUp.value = null;
+    activeFollowUpMessageId.value = null;
     return;
   }
 
@@ -56,6 +58,7 @@ const startFollowUpFlow = async () => {
   });
 
   isInFollowUpMode.value = true;
+  activeFollowUpMessageId.value = null; // Will be set when the first follow-up message is created
   isGenerating.value = true;
   startLoadingAnimation();
 
@@ -66,8 +69,9 @@ const startFollowUpFlow = async () => {
       // Show existing follow-up and ask if user wants to change it
       const existingFollowup = existingResponse.data.followups[0]; // Only one pending at a time
       
+      const messageId = `followup-existing-${Date.now()}`;
       chatMessages.value.push({
-        id: `followup-existing-${Date.now()}`,
+        id: messageId,
         role: 'assistant',
         content: `You already have a pending follow-up:\n\n"${existingFollowup.message_content}"\n\nScheduled for: ${formatDateForChat(existingFollowup.scheduled_at)}\n\nWould you like to change it?`,
         created_at: new Date().toISOString(),
@@ -76,6 +80,7 @@ const startFollowUpFlow = async () => {
           existingFollowup: existingFollowup
         }
       });
+      activeFollowUpMessageId.value = messageId;
     } else {
       // No existing follow-up, start normal flow
       const response = await AiChatAPI.scheduleFollowup(props.conversationId);
@@ -83,8 +88,9 @@ const startFollowUpFlow = async () => {
       if (response.data.success) {
         if (response.data.should_followup) {
           // Add AI response with draft message and confirm button
+          const messageId = `followup-draft-${Date.now()}`;
           chatMessages.value.push({
-            id: `followup-draft-${Date.now()}`,
+            id: messageId,
             role: 'assistant',
             content: `I suggest this follow-up message:\n\n"${response.data.draft_message}"\n\nWould you like to proceed with this message?`,
             created_at: new Date().toISOString(),
@@ -95,6 +101,7 @@ const startFollowUpFlow = async () => {
               reasoning: response.data.reasoning
             }
           });
+          activeFollowUpMessageId.value = messageId;
         } else {
           // No follow-up needed
           chatMessages.value.push({
@@ -104,6 +111,8 @@ const startFollowUpFlow = async () => {
             created_at: new Date().toISOString(),
           });
           isInFollowUpMode.value = false;
+          currentFollowUp.value = null;
+          activeFollowUpMessageId.value = null;
         }
       } else {
         chatMessages.value.push({
@@ -113,6 +122,8 @@ const startFollowUpFlow = async () => {
           created_at: new Date().toISOString(),
         });
         isInFollowUpMode.value = false;
+        currentFollowUp.value = null;
+        activeFollowUpMessageId.value = null;
       }
     }
   } catch (err) {
@@ -123,6 +134,8 @@ const startFollowUpFlow = async () => {
       created_at: new Date().toISOString(),
     });
     isInFollowUpMode.value = false;
+    currentFollowUp.value = null;
+    activeFollowUpMessageId.value = null;
   } finally {
     isGenerating.value = false;
     nextTick(() => scrollToBottom());
@@ -186,8 +199,9 @@ const confirmDraftMessage = async (messageId) => {
         followUpData: message.followUpData
       });
       
+      const newMessageId = `followup-time-${Date.now()}`;
       chatMessages.value.push({
-        id: `followup-time-${Date.now()}`,
+        id: newMessageId,
         role: 'assistant',
         content: `Great! Now let's set the timing. When would you like to send this follow-up?\n\nI suggest ${formatDateForChat(message.followUpData.suggestedTime)}, but you can tell me a different time like "10 minutes from now" or "tomorrow morning".`,
         created_at: new Date().toISOString(),
@@ -198,6 +212,7 @@ const confirmDraftMessage = async (messageId) => {
           existingFollowupId: null
         }
       });
+      activeFollowUpMessageId.value = newMessageId;
     }
   } catch (err) {
     chatMessages.value.push({
@@ -217,8 +232,9 @@ const proceedToTimeSelection = async (messageId) => {
   if (!message?.followUpData) return;
 
   // Add AI response with time options
+  const newMessageId = `followup-time-${Date.now()}`;
   chatMessages.value.push({
-    id: `followup-time-${Date.now()}`,
+    id: newMessageId,
     role: 'assistant',
     content: `Perfect! Now let's set the timing. When would you like to send this follow-up?\n\nI suggest 24 hours from now, but you can tell me a different time like "10 minutes from now" or "tomorrow morning".`,
     created_at: new Date().toISOString(),
@@ -229,6 +245,7 @@ const proceedToTimeSelection = async (messageId) => {
       existingFollowupId: message.followUpData.existingFollowupId || null
     }
   });
+  activeFollowUpMessageId.value = newMessageId;
 
   nextTick(() => scrollToBottom());
 };
@@ -280,8 +297,9 @@ const confirmTimeSelection = async (messageId) => {
         messageType: message.followUpData.type
       });
 
+      const newMessageId = `followup-existing-check-${Date.now()}`;
       chatMessages.value.push({
-        id: `followup-existing-check-${Date.now()}`,
+        id: newMessageId,
         role: 'assistant',
         content: content,
         created_at: new Date().toISOString(),
@@ -295,6 +313,7 @@ const confirmTimeSelection = async (messageId) => {
           }
         }
       });
+      activeFollowUpMessageId.value = newMessageId;
     } else {
       let messageContent = message.followUpData.draftMessage || message.followUpData.currentMessage;
       const scheduledTime = message.followUpData.scheduledTime || message.followUpData.currentTime;
@@ -334,6 +353,7 @@ const confirmTimeSelection = async (messageId) => {
 
         isInFollowUpMode.value = false;
         currentFollowUp.value = null;
+        activeFollowUpMessageId.value = null;
       } else {
         chatMessages.value.push({
           id: `followup-error-${Date.now()}`,
@@ -355,6 +375,7 @@ const confirmTimeSelection = async (messageId) => {
 
     isInFollowUpMode.value = false;
     currentFollowUp.value = null;
+    activeFollowUpMessageId.value = null;
   } finally {
     isGenerating.value = false;
     nextTick(() => scrollToBottom());
@@ -450,6 +471,7 @@ const replaceExistingFollowups = async (messageId) => {
 
       isInFollowUpMode.value = false;
       currentFollowUp.value = null;
+      activeFollowUpMessageId.value = null;
     } else {
       chatMessages.value.push({
         id: `followup-error-${Date.now()}`,
@@ -492,29 +514,7 @@ const keepExistingFollowups = async (messageId) => {
 
   isInFollowUpMode.value = false;
   currentFollowUp.value = null;
-  nextTick(() => scrollToBottom());
-};
-
-const changeExistingFollowup = async (messageId) => {
-  const message = chatMessages.value.find(m => m.id === messageId);
-  if (!message?.followUpData) return;
-
-  // Start the follow-up editing flow with the existing follow-up
-  const existingFollowup = message.followUpData.existingFollowup;
-  
-  chatMessages.value.push({
-    id: `followup-edit-start-${Date.now()}`,
-    role: 'assistant',
-    content: `Let's update your follow-up message. Here's the current message:\n\n"${existingFollowup.message_content}"\n\nWhat would you like to change about it?`,
-    created_at: new Date().toISOString(),
-    followUpData: {
-      type: 'draft_editing',
-      currentMessage: existingFollowup.message_content,
-      currentTime: existingFollowup.scheduled_at,
-      existingFollowupId: existingFollowup.id
-    }
-  });
-
+  activeFollowUpMessageId.value = null;
   nextTick(() => scrollToBottom());
 };
 
@@ -532,6 +532,7 @@ const keepExistingFollowup = async (messageId) => {
 
   isInFollowUpMode.value = false;
   currentFollowUp.value = null;
+  activeFollowUpMessageId.value = null;
   nextTick(() => scrollToBottom());
 };
 
@@ -558,6 +559,7 @@ const cancelExistingFollowup = async (messageId) => {
 
     isInFollowUpMode.value = false;
     currentFollowUp.value = null;
+    activeFollowUpMessageId.value = null;
   } catch (err) {
     chatMessages.value.push({
       id: `followup-error-${Date.now()}`,
@@ -665,8 +667,9 @@ const sendMessage = async () => {
         
         if (followUpData.type === 'time_update') {
           // Handle time update response
+          const messageId = `followup-time-update-${Date.now()}`;
           chatMessages.value.push({
-            id: `followup-time-update-${Date.now()}`,
+            id: messageId,
             role: 'assistant',
             content: `Perfect! I've updated the timing to ${formatDateForChat(followUpData.suggested_time)}. Would you like to confirm this schedule?`,
             created_at: new Date().toISOString(),
@@ -677,10 +680,12 @@ const sendMessage = async () => {
               followUpId: followUpData.followUpId
             }
           });
+          activeFollowUpMessageId.value = messageId;
         } else if (followUpData.type === 'message_update') {
           // Handle message update response
+          const messageId = `followup-message-update-${Date.now()}`;
           chatMessages.value.push({
-            id: `followup-message-update-${Date.now()}`,
+            id: messageId,
             role: 'assistant',
             content: `I've updated the follow-up message:\n\n"${followUpData.message}"\n\nWould you like to proceed with this message?`,
             created_at: new Date().toISOString(),
@@ -691,10 +696,12 @@ const sendMessage = async () => {
               reasoning: followUpData.reasoning
             }
           });
+          activeFollowUpMessageId.value = messageId;
         } else if (followUpData.type === 'new_followup') {
           // Handle new follow-up response
+          const messageId = `followup-new-${Date.now()}`;
           chatMessages.value.push({
-            id: `followup-new-${Date.now()}`,
+            id: messageId,
             role: 'assistant',
             content: `Here's a follow-up message:\n\n"${followUpData.message}"\n\nSuggested time: ${formatDateForChat(followUpData.suggested_time)}\n\nWould you like to proceed with this message?`,
             created_at: new Date().toISOString(),
@@ -705,6 +712,7 @@ const sendMessage = async () => {
               reasoning: followUpData.reasoning
             }
           });
+          activeFollowUpMessageId.value = messageId;
         } else {
           // Fallback to regular message display
           chatMessages.value.push({
@@ -848,6 +856,11 @@ const extractDraftResponse = (response) => {
 };
 
 const isMobile = computed(() => width.value < 768);
+
+// Check if a message is the active follow-up message
+const isActiveFollowUpMessage = (messageId) => {
+  return isInFollowUpMode.value && activeFollowUpMessageId.value === messageId;
+};
 const draftResponse = computed(() => extractDraftResponse(aiResponse.value));
 const hasResponse = computed(() => aiResponse.value && aiResponse.value.length > 0);
 const hasChatMessages = computed(() => chatMessages.value.length > 0);
@@ -935,9 +948,9 @@ onMounted(() => {
               <template v-if="message.followUpData.type === 'draft_confirmation'">
                 <button
                   @click="confirmDraftMessage(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-brand text-white hover:brightness-110' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -946,9 +959,9 @@ onMounted(() => {
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Make it more polite')"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -957,9 +970,9 @@ onMounted(() => {
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Make it shorter')"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -972,9 +985,9 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'draft_editing'">
                 <button
                   @click="proceedToTimeSelection(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-brand text-white hover:brightness-110' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -987,9 +1000,9 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'time_confirmation'">
                 <button
                   @click="confirmTimeSelection(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-brand text-white hover:brightness-110' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -998,9 +1011,9 @@ onMounted(() => {
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Schedule for 1 hour later')"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -1009,9 +1022,9 @@ onMounted(() => {
                 </button>
                 <button
                   @click="editDraftMessage(message.id, 'Schedule for 24 hours later')"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -1024,9 +1037,9 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'time_editing'">
                 <button
                   @click="confirmTimeSelection(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-brand text-white hover:brightness-110' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -1038,21 +1051,10 @@ onMounted(() => {
               <!-- Existing Follow-up Change -->
               <template v-else-if="message.followUpData.type === 'existing_followup_change'">
                 <button
-                  @click="changeExistingFollowup(message.id)"
-                  :disabled="!isInFollowUpMode"
-                  class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
-                    ? 'bg-n-brand text-white hover:brightness-110' 
-                    : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
-                >
-                  <Icon icon="i-lucide-edit" class="w-3 h-3" />
-                  Yes, Change It
-                </button>
-                <button
                   @click="keepExistingFollowup(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -1061,9 +1063,9 @@ onMounted(() => {
                 </button>
                 <button
                   @click="cancelExistingFollowup(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-red-500 text-white hover:bg-red-600' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -1076,9 +1078,9 @@ onMounted(() => {
               <template v-else-if="message.followUpData.type === 'existing_followups_confirmation'">
                 <button
                   @click="replaceExistingFollowups(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-brand text-white hover:brightness-110' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >
@@ -1087,9 +1089,9 @@ onMounted(() => {
                 </button>
                 <button
                   @click="keepExistingFollowups(message.id)"
-                  :disabled="!isInFollowUpMode"
+                  :disabled="!isActiveFollowUpMessage(message.id)"
                   class="flex items-center gap-1 px-2 py-1 text-xs rounded transition-all"
-                  :class="isInFollowUpMode 
+                  :class="isActiveFollowUpMessage(message.id) 
                     ? 'bg-n-slate-9/10 hover:bg-n-slate-9/20' 
                     : 'bg-n-slate-6 text-n-slate-9 cursor-not-allowed opacity-50'"
                 >

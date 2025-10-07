@@ -15,6 +15,8 @@ class Conversations::MessageWindowService
   private
 
   def messaging_window
+    return nil if @conversation.inbox.nil?
+
     case @conversation.inbox.channel_type
     when 'Channel::Api'
       api_messaging_window
@@ -36,6 +38,7 @@ class Conversations::MessageWindowService
   end
 
   def api_messaging_window
+    return if @conversation.inbox.nil? || @conversation.inbox.channel.nil?
     return if @conversation.inbox.channel.additional_attributes['agent_reply_time_window'].blank?
 
     @conversation.inbox.channel.additional_attributes['agent_reply_time_window'].to_i.hours
@@ -43,6 +46,8 @@ class Conversations::MessageWindowService
 
   # Check medium of the inbox to determine the messaging window
   def twilio_messaging_window
+    return nil if @conversation.inbox.nil? || @conversation.inbox.channel.nil?
+
     @conversation.inbox.channel.medium == 'whatsapp' ? MESSAGING_WINDOW_24_HOURS : nil
   end
 
