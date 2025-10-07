@@ -131,13 +131,11 @@ const onClickDownload = async () => {
   try {
     isDownloading.value = true;
     
-    // Create a temporary link element for direct download
     const link = document.createElement('a');
     link.href = url;
-    link.download = fileNameFromDataUrl.value || `attachment.${extension || 'file'}`;
+    link.download = `attachment.${extension || 'file'}`;
     link.rel = 'noreferrer noopener nofollow';
     
-    // Append to body, click, and remove
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

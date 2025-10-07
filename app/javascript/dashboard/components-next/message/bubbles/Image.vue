@@ -71,7 +71,6 @@ const downloadAttachment = async () => {
         :src="attachment.dataUrl"
         :width="attachment.width"
         :height="attachment.height"
-        @click="onClick"
         @error="handleError"
       />
       <div
