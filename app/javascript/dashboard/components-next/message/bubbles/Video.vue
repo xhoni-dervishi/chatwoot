@@ -40,7 +40,6 @@ const downloadVideo = async () => {
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = `video.${extension || 'mp4'}`;
-    link.target = '_blank';
     link.rel = 'noreferrer noopener nofollow';
     
     // Append to body, click, and remove

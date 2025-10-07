@@ -38,7 +38,6 @@ const downloadAttachment = async () => {
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = `image.${extension || 'jpg'}`;
-    link.target = '_blank';
     link.rel = 'noreferrer noopener nofollow';
     
     // Append to body, click, and remove

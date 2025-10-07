@@ -135,7 +135,6 @@ const onClickDownload = async () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = fileNameFromDataUrl.value || `attachment.${extension || 'file'}`;
-    link.target = '_blank';
     link.rel = 'noreferrer noopener nofollow';
     
     // Append to body, click, and remove

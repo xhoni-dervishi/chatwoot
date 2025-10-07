@@ -120,7 +120,6 @@ const downloadAudio = async () => {
   const link = document.createElement('a');
   link.href = dataUrl;
   link.download = `audio.${extension || 'mp3'}`;
-  link.target = '_blank';
   link.rel = 'noreferrer noopener nofollow';
   
   // Append to body, click, and remove
