@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import Icon from 'next/icon/Icon.vue';
 import { useSnakeCase } from 'dashboard/composables/useTransformKeys';
 import { useMessageContext } from '../provider.js';
+import { downloadFile } from 'dashboard/utils/downloadFile';
 
 import GalleryView from 'dashboard/components/widgets/conversation/components/GalleryView.vue';
 
@@ -20,11 +21,26 @@ const { filteredCurrentChatAttachments } = useMessageContext();
 const handleError = () => {
   hasError.value = true;
 };
+
+const downloadImage = async (event) => {
+  event.stopPropagation(); // Prevent opening gallery
+  const { fileType, dataUrl, extension } = attachment;
+  
+  try {
+    await downloadFile({
+      url: dataUrl,
+      type: fileType,
+      extension: extension,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+  }
+};
 </script>
 
 <template>
   <div
-    class="size-[72px] overflow-hidden contain-content rounded-xl cursor-pointer"
+    class="size-[72px] overflow-hidden contain-content rounded-xl cursor-pointer relative group"
     @click="showGallery = true"
   >
     <div
@@ -40,6 +56,13 @@ const handleError = () => {
       :src="attachment.dataUrl"
       @error="handleError"
     />
+    <button
+      v-if="!hasError"
+      class="absolute top-1 right-1 p-1 bg-n-slate-1/80 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-n-slate-2/80"
+      @click="downloadImage"
+    >
+      <Icon icon="i-lucide-download" class="size-3 text-n-slate-12" />
+    </button>
   </div>
   <GalleryView
     v-if="showGallery"

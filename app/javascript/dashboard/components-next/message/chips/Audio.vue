@@ -10,6 +10,7 @@ import Icon from 'next/icon/Icon.vue';
 import { timeStampAppendedURL } from 'dashboard/helper/URLHelper';
 import { useEmitter } from 'dashboard/composables/emitter';
 import { emitter } from 'shared/helpers/mitt';
+import { downloadFile } from 'dashboard/utils/downloadFile';
 
 const { attachment } = defineProps({
   attachment: {
@@ -116,16 +117,15 @@ const changePlaybackSpeed = () => {
 const downloadAudio = async () => {
   const { fileType, dataUrl, extension } = attachment;
   
-  // Create a temporary link element for direct download
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = `audio.${extension || 'mp3'}`;
-  link.rel = 'noreferrer noopener nofollow';
-  
-  // Append to body, click, and remove
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  try {
+    await downloadFile({
+      url: dataUrl,
+      type: fileType,
+      extension: extension,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+  }
 };
 </script>
 
