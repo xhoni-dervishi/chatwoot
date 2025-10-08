@@ -5,6 +5,7 @@ import { getFileInfo } from '@chatwoot/utils';
 
 import FileIcon from 'next/icon/FileIcon.vue';
 import Icon from 'next/icon/Icon.vue';
+import { downloadFile } from 'dashboard/utils/downloadFile';
 
 const { attachment } = defineProps({
   attachment: {
@@ -53,6 +54,20 @@ const textColorClass = computed(() => {
 
   return colorMap[fileDetails.value.type] || 'text-n-slate-12';
 });
+
+const downloadFileAttachment = async () => {
+  const { fileType, dataUrl, extension } = attachment;
+  
+  try {
+    await downloadFile({
+      url: dataUrl,
+      type: fileType,
+      extension: extension,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+  }
+};
 </script>
 
 <template>
@@ -67,14 +82,12 @@ const textColorClass = computed(() => {
     >
       {{ displayFileName }}
     </span>
-    <a
+    <button
       v-tooltip="t('CONVERSATION.DOWNLOAD')"
-      class="flex-shrink-0 size-9 grid place-content-center cursor-pointer text-n-slate-11 hover:text-n-slate-12 transition-colors"
-      :href="attachment.dataUrl"
-      rel="noreferrer noopener nofollow"
-      target="_blank"
+      class="flex-shrink-0 size-9 grid place-content-center cursor-pointer text-n-slate-11 hover:text-n-slate-12 transition-colors border-0 bg-transparent"
+      @click="downloadFileAttachment"
     >
       <Icon icon="i-lucide-download" />
-    </a>
+    </button>
   </div>
 </template>
