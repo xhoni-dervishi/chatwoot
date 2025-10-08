@@ -18,10 +18,10 @@ export const downloadFile = async ({
     }
 
     try {
-        // For S3 URLs and cross-origin requests, we need to fetch as blob
+        // First try to fetch with CORS
         const response = await fetch(url, {
             cache: 'no-store',
-            mode: 'cors', // Enable CORS for cross-origin requests
+            mode: 'cors',
         });
 
         if (!response.ok) {
@@ -66,10 +66,39 @@ export const downloadFile = async ({
             URL.revokeObjectURL(blobUrl);
         }, 100);
     } catch (error) {
-        // Enhanced error handling for CORS and network issues
+        // If CORS fails, fall back to direct download approach
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            throw new Error('Download failed: Network error or CORS policy blocked the request');
+            console.warn('CORS blocked, falling back to direct download:', error.message);
+
+            try {
+                // Extract filename from URL
+                const urlFilename = url.split('/').pop().split('?')[0];
+                const decodedUrlFilename = decodeURIComponent(urlFilename);
+                const fileExtension = extension || type;
+
+                const filename = decodedUrlFilename && decodedUrlFilename !== url
+                    ? decodedUrlFilename
+                    : `attachment_${Date.now()}.${fileExtension}`;
+
+                // Create direct download link (this will work even with CORS issues)
+                const link = Object.assign(document.createElement('a'), {
+                    href: url,
+                    download: filename,
+                    style: 'display: none',
+                    rel: 'noreferrer noopener nofollow',
+                });
+
+                document.body.append(link);
+                link.click();
+                link.remove();
+
+                return; // Success with fallback method
+            } catch (fallbackError) {
+                console.error('Fallback download also failed:', fallbackError);
+                throw new Error('Download failed: CORS policy blocked the request and fallback method failed');
+            }
         }
+
         throw error instanceof Error ? error : new Error('Download failed');
     }
 };

@@ -1227,9 +1227,9 @@ onMounted(() => {
         <button
           @click="draftReply"
           :disabled="isGenerating"
-          class="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="flex items-center gap-2 px-3 py-2 bg-n-slate-3 border border-n-slate-6 rounded-lg text-sm font-medium text-n-slate-12 hover:bg-n-slate-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <Icon icon="i-lucide-message-square" class="w-4 h-4 text-n-slate-12" />
+          <Icon icon="i-lucide-message-square" class="w-4 h-4" />
           Draft a reply
         </button>
       </div>
@@ -1241,7 +1241,7 @@ onMounted(() => {
           @keydown="handleKeyPress"
           :disabled="isGenerating"
           placeholder="Ask me anything about this conversation..."
-          class="flex-1 px-3 py-2 h-12 !mb-0 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          class="flex-1 px-3 py-2 h-12 !mb-0 border border-n-slate-6 rounded-lg text-sm bg-n-slate-2 text-n-slate-12 placeholder-n-slate-9 focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
           rows="2"
         />
         <button

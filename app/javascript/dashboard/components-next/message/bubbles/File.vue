@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import { useMessageContext } from '../provider.js';
+import { downloadFile } from 'dashboard/utils/downloadFile';
 import BaseAttachmentBubble from './BaseAttachment.vue';
 import FileIcon from 'next/icon/FileIcon.vue';
 
@@ -25,6 +26,27 @@ const fileName = computed(() => {
 const fileType = computed(() => {
   return fileName.value.split('.').pop();
 });
+
+const isDownloading = ref(false);
+
+const downloadFileAttachment = async () => {
+  const attachment = attachments.value[0];
+  const { fileType: type, dataUrl, extension } = attachment;
+  
+  try {
+    isDownloading.value = true;
+    
+    await downloadFile({
+      url: dataUrl,
+      type: type,
+      extension: extension,
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+  } finally {
+    isDownloading.value = false;
+  }
+};
 </script>
 
 <template>
@@ -34,8 +56,8 @@ const fileType = computed(() => {
     sender-translation-key="CONVERSATION.SHARED_ATTACHMENT.FILE"
     :content="decodeURI(fileName)"
     :action="{
-      href: url,
-      label: $t('CONVERSATION.DOWNLOAD'),
+      onClick: downloadFileAttachment,
+      label: isDownloading ? $t('CONVERSATION.DOWNLOADING') : $t('CONVERSATION.DOWNLOAD'),
     }"
   >
     <template #icon>

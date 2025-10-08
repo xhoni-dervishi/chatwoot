@@ -7,6 +7,7 @@ import Button from 'next/button/Button.vue';
 import Icon from 'next/icon/Icon.vue';
 import { useSnakeCase } from 'dashboard/composables/useTransformKeys';
 import { useMessageContext } from '../provider.js';
+import { downloadFile } from 'dashboard/utils/downloadFile';
 import GalleryView from 'dashboard/components/widgets/conversation/components/GalleryView.vue';
 import { ATTACHMENT_TYPES } from '../constants';
 
@@ -36,16 +37,11 @@ const downloadVideo = async () => {
   try {
     isDownloading.value = true;
     
-    // Create a temporary link element for direct download
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = `video.${extension || 'mp4'}`;
-    link.rel = 'noreferrer noopener nofollow';
-    
-    // Append to body, click, and remove
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await downloadFile({
+      url: dataUrl,
+      type: fileType,
+      extension: extension,
+    });
   } catch (error) {
     console.error('Download error:', error);
     useAlert(t('GALLERY_VIEW.ERROR_DOWNLOADING'));
